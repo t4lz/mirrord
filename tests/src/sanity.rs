@@ -5,7 +5,7 @@ mod tests {
     use std::{
         collections::HashMap,
         fmt::Debug,
-        net::Ipv4Addr,
+        net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         process::Stdio,
         sync::{Arc, Mutex},
         time::Duration,
@@ -453,10 +453,17 @@ mod tests {
                 "sessionAffinity": "None",
                 "ports": [
                     {
+                        "name": "http",
                         "protocol": "TCP",
                         "port": 80,
                         "targetPort": 80
-                    }
+                    },
+                    {
+                        "name": "node-outgoing-udp",
+                        "protocol": "UDP",
+                        "port": 31415,
+                        "targetPort": 31415
+                    },
                 ]
             }
         }))
@@ -496,7 +503,12 @@ mod tests {
         }
     }
 
-    async fn get_service_url(kube_client: Client, service: &EchoService) -> String {
+    /// Get IP and port of the NodePort service.
+    async fn get_service_addr(
+        kube_client: Client,
+        service: &EchoService,
+        udp: bool,
+    ) -> (String, i32) {
         let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), &service.namespace);
         let pods = pod_api
             .list(&ListParams::default().labels(&format!("app={}", service.name)))
@@ -521,9 +533,16 @@ mod tests {
             .next()
             .and_then(|service| service.spec)
             .and_then(|spec| spec.ports)
-            .and_then(|mut ports| ports.pop())
+            .unwrap()[udp as usize] // Index 0 for TCP, 1 for UDP.
+            .node_port
             .unwrap();
-        format!("http://{}:{}", host_ip, port.node_port.unwrap())
+        (host_ip, port)
+    }
+
+    /// Returns http url of first Node port in spec (TCP port 80).
+    async fn get_service_url(kube_client: Client, service: &EchoService) -> String {
+        let (ip, port) = get_service_addr(kube_client.clone(), &service, false).await;
+        format!("http://{}:{}", ip, port)
     }
 
     pub async fn get_pod_instance(
@@ -1046,6 +1065,38 @@ mod tests {
             "node-e2e/outgoing/test_outgoing_traffic_make_request_after_listen.mjs",
         ];
         let mut process = run(node_command, &service.pod_name, None, None).await;
+        let res = process.child.wait().await.unwrap();
+        assert!(res.success());
+        process.assert_stderr();
+    }
+
+    #[rstest]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[timeout(Duration::from_secs(30))]
+    pub async fn test_outgoing_traffic_udp(
+        #[future]
+        #[notrace]
+        service: EchoService,
+        #[future]
+        #[notrace]
+        kube_client: Client,
+    ) {
+        let service = service.await;
+        let node_command = vec!["node", "node-e2e/outgoing/test_outgoing_traffic_udp.mjs"];
+        let mut process = run(node_command, &service.pod_name, None, None).await;
+        let kube_client = kube_client.await;
+        let (ip, port) = get_service_addr(kube_client.clone(), &service, true).await;
+
+        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let dest = SocketAddr::new(IpAddr::V4(ip.parse().unwrap()), port as u16);
+
+        socket.send_to("Hi".as_ref(), &dest).unwrap();
+
+        let mut buf = [0; 32];
+        let (amt, dest) = socket.recv_from(&mut buf).unwrap();
+
+        assert_eq!(buf, "Can I pass the test please?".as_ref()); // Sure you can.
+
         let res = process.child.wait().await.unwrap();
         assert!(res.success());
         process.assert_stderr();

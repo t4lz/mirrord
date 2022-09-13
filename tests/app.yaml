@@ -34,10 +34,16 @@ metadata:
   name: py-serv
 spec:
   ports:
-    - port: 80
+    - name: http
+      port: 80
       protocol: TCP
       targetPort: 80
       nodePort: 30000
+    - name: outgoing-udp-node
+      protocol: UDP
+      port: 31415
+      targetPort: 31415
+      nodePort: 30003
   selector:
     app: py-serv
   sessionAffinity: None
