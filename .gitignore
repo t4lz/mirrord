@@ -14,6 +14,9 @@ tests/go-e2e-env/go-e2e-env
 tests/go-e2e-fileops/go-e2e-fileops
 tests/go-e2e-outgoing/go-e2e-outgoing
 
+### rust tests ###
+tests/rust-e2e/outgoing-udp/outgoing-udp
+
 ### VSCode ###
 .vscode/*
 !.vscode/settings.json

@@ -180,6 +180,9 @@ jobs:
       - run: |
           cd tests/go-e2e-outgoing
           go build -o 19
+      - run: |
+          cd tests/rust-e2e/outgoing-udp
+          cargo build
       - name: start minikube
         uses: medyagh/setup-minikube@master
         with:

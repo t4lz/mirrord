@@ -4,8 +4,10 @@
 mod tests {
     use std::{
         collections::HashMap,
+        error::Error,
         fmt::Debug,
         net::Ipv4Addr,
+        net::SocketAddr,
         process::Stdio,
         sync::{Arc, Mutex},
         time::Duration,
@@ -24,6 +26,7 @@ mod tests {
         runtime::wait::{await_condition, conditions::is_pod_running},
         Api, Client, Config,
     };
+    use quinn::{ClientConfig, Endpoint};
     use rand::{distributions::Alphanumeric, Rng};
     use reqwest::StatusCode;
     use rstest::*;
@@ -496,7 +499,8 @@ mod tests {
         }
     }
 
-    async fn get_service_url(kube_client: Client, service: &EchoService) -> String {
+
+    async fn get_service_addr(kube_client: Client, service: &EchoService) -> (String, i32) {
         let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), &service.namespace);
         let pods = pod_api
             .list(&ListParams::default().labels(&format!("app={}", service.name)))
@@ -522,8 +526,15 @@ mod tests {
             .and_then(|service| service.spec)
             .and_then(|spec| spec.ports)
             .and_then(|mut ports| ports.pop())
+            .unwrap()
+            .node_port
             .unwrap();
-        format!("http://{}:{}", host_ip, port.node_port.unwrap())
+        (host_ip, port)
+    }
+
+    async fn get_service_url(kube_client: Client, service: &EchoService) -> String {
+        let (ip, port) = get_service_addr(kube_client.clone(), &service).await;
+        format!("http://{}:{}", ip, port)
     }
 
     pub async fn get_pod_instance(
@@ -1068,6 +1079,88 @@ mod tests {
         let service = service.await;
         let command = vec!["go-e2e-outgoing/19"];
         let mut process = run(command, &service.pod_name, None, None).await;
+        let res = process.child.wait().await.unwrap();
+        assert!(res.success());
+        process.assert_stderr();
+    }
+
+    fn configure_client() -> ClientConfig {
+        let crypto = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_custom_certificate_verifier(SkipServerVerification::new())
+            .with_no_client_auth();
+
+        ClientConfig::new(Arc::new(crypto))
+    }
+
+    /// quinn test code copied and adapted from
+    /// https://github.com/quinn-rs/quinn/tree/main/quinn/examples
+    /// Dummy certificate verifier that treats any certificate as valid.
+    /// NOTE, such verification is vulnerable to MITM attacks, but convenient for testing.
+    struct SkipServerVerification;
+
+    impl SkipServerVerification {
+        fn new() -> Arc<Self> {
+            Arc::new(Self)
+        }
+    }
+
+    impl rustls::client::ServerCertVerifier for SkipServerVerification {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &rustls::Certificate,
+            _intermediates: &[rustls::Certificate],
+            _server_name: &rustls::ServerName,
+            _scts: &mut dyn Iterator<Item = &[u8]>,
+            _ocsp_response: &[u8],
+            _now: std::time::SystemTime,
+        ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+            Ok(rustls::client::ServerCertVerified::assertion())
+        }
+    }
+
+    async fn make_quic_connection(server_addr: SocketAddr) -> Result<(), Box<dyn Error>> {
+        let client_cfg = configure_client();
+        let mut endpoint = Endpoint::client("127.0.0.1:0".parse().unwrap())?;
+        endpoint.set_default_client_config(client_cfg);
+
+        // connect to server
+        let quinn::NewConnection { connection, .. } = endpoint
+            .connect(server_addr, "localhost")
+            .unwrap()
+            .await
+            .unwrap();
+        println!("connected to quic server: addr={}", connection.remote_address());
+        // Dropping handles allows the corresponding objects to automatically shut down
+        drop(connection);
+        // Make sure the server has a chance to clean up
+        endpoint.wait_idle().await;
+
+        Ok(())
+    }
+
+
+
+    #[rstest]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[timeout(Duration::from_secs(240))]
+    pub async fn test_outgoing_quic(
+        #[future]
+        #[notrace]
+        service: EchoService,
+        #[future]
+        #[notrace]
+        kube_client: Client,
+    ) {
+        let service = service.await;
+        let command = vec!["../target/debug/outgoing-udp", "80"];
+        let mut process = run(command, &service.pod_name, None, None).await;
+
+        let kube_client = kube_client.await;
+        let (ip, port) = get_service_addr(kube_client.clone(), &service).await;
+        let addr = format!("{}:{}", ip, port);
+        make_quic_connection(addr.parse().unwrap()).await.unwrap();
+
         let res = process.child.wait().await.unwrap();
         assert!(res.success());
         process.assert_stderr();

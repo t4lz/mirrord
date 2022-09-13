@@ -1,0 +1,22 @@
+[package]
+name = "outgoing-udp"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["rustls-native-certs", "tls-rustls", "runtime-tokio", "rustls/dangerous_configuration"]
+# Provides `ClientConfig::with_native_roots()` convenience method
+tls-rustls = ["rustls", "rustls-native-certs", "webpki"]
+# Enables `Endpoint::client` and `Endpoint::server` conveniences
+runtime-tokio = ["tokio/time", "tokio/rt", "tokio/net"]
+
+[dependencies]
+quinn = "0.8.5"
+rcgen = "0.9.1"
+rustls = { version = "0.20.3", default-features = false, features = ["quic"], optional = true }
+webpki = { version = "0.22", default-features = false, optional = true }
+rustls-native-certs = { version = "0.6", optional = true }
+tokio = { version = "1.0.1", features = ["rt", "rt-multi-thread", "time", "macros", "sync"] }
+futures-util = "0.3.24"
