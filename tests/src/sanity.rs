@@ -5,7 +5,7 @@ mod tests {
     use std::{
         collections::HashMap,
         fmt::Debug,
-        net::Ipv4Addr,
+        net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         process::Stdio,
         sync::{Arc, Mutex},
         time::Duration,
@@ -1046,6 +1046,32 @@ mod tests {
             "node-e2e/outgoing/test_outgoing_traffic_make_request_after_listen.mjs",
         ];
         let mut process = run(node_command, &service.pod_name, None, None).await;
+        let res = process.child.wait().await.unwrap();
+        assert!(res.success());
+        process.assert_stderr();
+    }
+
+    #[rstest]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[timeout(Duration::from_secs(30))]
+    pub async fn test_outgoing_traffic_udp(
+        #[future]
+        service: EchoService,
+        #[future]
+        #[notrace]
+        kube_client: Client,
+    ) {
+        let service = service.await;
+        let node_command = vec!["node", "node-e2e/outgoing/test_outgoing_traffic_udp_client.mjs"];
+        let mut process = run(node_command, &service.pod_name, None, None).await;
+
+        let socket = UdpSocket::bind("127.0.0.1:31415").unwrap();
+
+        let mut buf = [0; 32];
+        let (amt, dest) = socket.recv_from(&mut buf).unwrap();
+
+        assert_eq!(buf, "Can I pass the test please?".as_ref()); // Sure you can.
+
         let res = process.child.wait().await.unwrap();
         assert!(res.success());
         process.assert_stderr();
