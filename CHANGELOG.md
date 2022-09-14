@@ -7,6 +7,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added
+- Outgoing UDP test with node. Closes [[#323](https://github.com/metalbear-co/mirrord/issues/323)]
+
 ### Fixed
 - Fix crash in VS Code extension happening because the MIRRORD_OVERRIDE_ENV_VARS_INCLUDE and MIRRORD_OVERRIDE_ENV_VARS_EXCLUDE vars being populated with empty values (rather than not being populated at all).Closes [[#413](https://github.com/metalbear-co/mirrord/issues/413)].
 - Add exception to gradle when dylib/so file is not found. Closes [[#345](https://github.com/metalbear-co/mirrord/issues/345)]
