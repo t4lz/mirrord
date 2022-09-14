@@ -1075,22 +1075,18 @@ mod tests {
     #[timeout(Duration::from_secs(30))]
     pub async fn test_outgoing_traffic_udp(
         #[future]
-        #[notrace]
         service: EchoService,
         #[future]
         #[notrace]
         kube_client: Client,
     ) {
         let service = service.await;
-        let node_command = vec!["node", "node-e2e/outgoing/test_outgoing_traffic_udp.mjs"];
-        let mut process = run(node_command, &service.pod_name, None, None).await;
-        let kube_client = kube_client.await;
-        let (ip, port) = get_service_addr(kube_client.clone(), &service, true).await;
+        let node_command = vec!["node", "node-e2e/outgoing/test_outgoing_traffic_udp_client.mjs"];
+        // let mut process = run(node_command, &service.pod_name, None, None).await;
+        let mirrord_args = vec!["--no-outgoing"];
+        let mut process = run(node_command, &service.pod_name, None, Some(mirrord_args)).await;
 
-        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let dest = SocketAddr::new(IpAddr::V4(ip.parse().unwrap()), port as u16);
-
-        socket.send_to("Hi".as_ref(), &dest).unwrap();
+        let socket = UdpSocket::bind("127.0.0.1:31415").unwrap();
 
         let mut buf = [0; 32];
         let (amt, dest) = socket.recv_from(&mut buf).unwrap();

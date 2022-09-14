@@ -114,8 +114,6 @@ impl UdpOutgoingApi {
     /// Does the actual work for `Request`s and prepares the `Responses:
     #[allow(clippy::type_complexity)]
     async fn interceptor_task(
-        pid: Option<u64>,
-        mut layer_rx: Receiver<Layer>,
         daemon_tx: Sender<Daemon>,
     ) -> Result<(), AgentError> {
         if let Some(pid) = pid {
