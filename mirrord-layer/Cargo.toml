@@ -49,6 +49,8 @@ stacker = "0.1"
 
 [dev-dependencies]
 rstest = "*"
+exec = "0.3"
+tracing-test = "0.2"
 
 [lib]
 crate_type = ["cdylib"]
