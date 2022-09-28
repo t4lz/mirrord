@@ -51,6 +51,7 @@ stacker = "0.1"
 rstest = "*"
 exec = "0.3"
 tracing-test = "0.2"
+fork = "0.1"
 
 [lib]
 crate_type = ["cdylib"]

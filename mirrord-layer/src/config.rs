@@ -66,4 +66,7 @@ pub struct LayerConfig {
 
     #[envconfig(from = "MIRRORD_SKIP_PROCESSES")]
     pub skip_processes: Option<String>,
+
+    #[envconfig(from = "MIRRORD_USE_TCP_ADDR")]
+    pub use_tcp_addr: Option<String>,
 }

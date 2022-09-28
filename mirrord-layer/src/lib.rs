@@ -6,11 +6,11 @@
 #![feature(result_flattening)]
 #![feature(io_error_uncategorized)]
 #![feature(let_chains)]
+#![feature(type_alias_impl_trait)]
+#![feature(type_ascription)]
 
-use std::{
-    collections::{HashSet, VecDeque},
-    sync::{LazyLock, OnceLock},
-};
+use std::{collections::{HashSet, VecDeque}, io, sync::{LazyLock, OnceLock}};
+use actix_codec::Framed;
 
 use common::{GetAddrInfoHook, ResponseChannel};
 use ctor::ctor;
@@ -18,7 +18,7 @@ use envconfig::Envconfig;
 use error::{LayerError, Result};
 use file::OPEN_FILES;
 use frida_gum::{interceptor::Interceptor, Gum};
-use futures::{SinkExt, StreamExt};
+use futures::{Sink, SinkExt, Stream, StreamExt};
 use kube::api::Portforwarder;
 use libc::c_int;
 use mirrord_macro::hook_guard_fn;
@@ -38,7 +38,10 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{sleep, Duration},
 };
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::TcpStream;
 use tracing::{error, info, trace};
+use tracing::log::debug;
 use tracing_subscriber::{fmt::format::FmtSpan, prelude::*};
 
 use crate::{common::HookMessage, config::LayerConfig, file::FileHandler};
@@ -60,6 +63,9 @@ mod tcp_steal;
 #[cfg(target_os = "linux")]
 #[cfg(target_arch = "x86_64")]
 mod go_hooks;
+
+// type Codec = (impl actix_codec::AsyncRead + actix_codec::AsyncWrite + Unpin + Sized, ClientCodec);
+// type FramedCodec = Framed<impl AsyncRead + AsyncWrite + Unpin + Sized, ClientCodec>;
 
 static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
@@ -107,19 +113,6 @@ fn init(config: LayerConfig) {
 
     info!("Using port `{connection_port:?}` for communication");
 
-    let port_forwarder = RUNTIME
-        .block_on(pod_api::create_agent(config.clone(), connection_port))
-        .unwrap_or_else(|err| match err {
-            LayerError::KubeError(kube::Error::HyperError(err)) => {
-                eprintln!("\nmirrord encountered an error accessing the Kubernetes API. Consider passing --accept-invalid-certificates.\n");
-
-                match err.into_cause() {
-                    Some(cause) => panic!("{}", cause),
-                    None => panic!("mirrord got KubeError::HyperError"),
-                }
-            }
-            _ => panic!("failed to create agent: {}", err),
-        });
 
     let (sender, receiver) = channel::<HookMessage>(1000);
     unsafe {
@@ -136,7 +129,6 @@ fn init(config: LayerConfig) {
     enable_hooks(*enabled_file_ops, config.remote_dns);
 
     RUNTIME.block_on(start_layer_thread(
-        port_forwarder,
         receiver,
         config,
         connection_port,
@@ -354,19 +346,47 @@ async fn thread_loop(
         }
     }
 }
+trait NewTrait: futures::Sink<ClientMessage> + futures::Stream {}
+// dyn Sink<ClientMessage, Error = dyn From<std::io::Error>> + Stream<Item = DaemonMessage>
+fn get_codec<T: AsyncRead + AsyncWrite + Unpin + Send>(connection: T) -> Box<dyn NewTrait>
+{
+    Box::new(Framed::new(connection, ClientCodec::new()))
+}
 
-#[tracing::instrument(level = "trace", skip(pf, receiver))]
+#[tracing::instrument(level = "trace", skip(receiver))]
 async fn start_layer_thread(
-    mut pf: Portforwarder,
     receiver: Receiver<HookMessage>,
     config: LayerConfig,
     connection_port: u16,
 ) {
-    let port = pf.take_stream(connection_port).unwrap(); // TODO: Make port configurable
-
     // `codec` is used to retrieve messages from the daemon (messages that are sent from -agent to
     // -layer)
-    let mut codec = actix_codec::Framed::new(port, ClientCodec::new());
+    let mut codec = match &config.use_tcp_addr {
+        None => {
+            trace!("Creating agent with Kubernetes.");
+            let mut pf = pod_api::create_agent(config.clone(), connection_port)
+                .await
+                .unwrap_or_else(|err| match err {
+                    LayerError::KubeError(kube::Error::HyperError(err)) => {
+                        eprintln!("\nmirrord encountered an error accessing the Kubernetes API. Consider passing --accept-invalid-certificates.\n");
+
+                        match err.into_cause() {
+                            Some(cause) => panic!("{}", cause),
+                            None => panic!("mirrord got KubeError::HyperError"),
+                        }
+                    }
+                    _ => panic!("failed to create agent: {}", err),
+                });
+            // TODO: change that unwrap.
+            get_codec(pf.take_stream(connection_port).unwrap())
+        }
+        Some(addr) => {
+            debug!("Sending agent communication directly to {addr}, without setting up an agent.");
+            // TODO: change that unwrap.
+            let stream = TcpStream::connect(addr).await.unwrap();
+            get_codec(stream)
+        }
+    };
 
     let (env_vars_filter, env_vars_select) = match (
         config.override_env_vars_exclude,
