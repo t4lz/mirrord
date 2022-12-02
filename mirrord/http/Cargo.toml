@@ -18,6 +18,7 @@ edition.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 mirrord-protocol = { path = "../protocol" }
+futures.workspace = true
 
 hyper = { version = "1.0.0-rc.1", features = ["full"] }
 tokio = { version = "*", features = ["full"] }
