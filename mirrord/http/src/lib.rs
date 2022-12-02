@@ -161,7 +161,7 @@ pub async fn is_http(tcp_stream: TcpStream) -> bool {
 
     // Keep peeking until we have enough bytes to decide.
     while let Ok(num_bytes) = poll_fn(|cx| tcp_stream.poll_peek(cx, &mut buf)).await? {
-        if num_bytes >= H2_PREFACE.le() {
+        if num_bytes >= H2_PREFACE.len() {
             return buf[1..H2_PREFACE.len()] == H2_PREFACE
                 || matches!(
                     httparse::Request::new(&mut empty_headers).parse(&buf[..]),
