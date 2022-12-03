@@ -139,43 +139,31 @@ impl HttpProxy {
 
 const H2_PREFACE: &[u8] = b"PRI * HTTP/2.0";
 
-/// Should we treat `tcp_stream` as http?
+/// Should we treat `tcp_stream` as HTTP?
 ///
 /// Does not consume bytes from the stream.
-/// This is a best effort classification, not a guarantee that the request is well-formed and valid.
-/// For HTTP 1 it is verified that the start of the stream is
-/// ```text
-/// METHOD PREFIX-OF-TARGET
-/// ```
-/// or
-/// ```text
-/// METHOD TARGET PREFIX-OF-HTTP-VERSION
-/// ```
-/// And that all present parts are valid.
-/// For HTTP 2 the preface is verified.
-pub async fn is_http(tcp_stream: TcpStream) -> bool {
+/// Check if the first available bytes in a stream could be of an http request.
+/// This is a best effort classification, not a guarantee that the stream is HTTP.
+pub async fn possibly_http(tcp_stream: TcpStream) -> bool {
     let mut buf = [0u8; 64];
     let mut buf = ReadBuf::new(&mut buf);
 
     let mut empty_headers = [httparse::EMPTY_HEADER; 0];
 
-    // Keep peeking until we have enough bytes to decide.
-    while let Ok(num_bytes) = poll_fn(|cx| tcp_stream.poll_peek(cx, &mut buf)).await? {
-        if num_bytes >= H2_PREFACE.len() {
-            return buf[1..H2_PREFACE.len()] == H2_PREFACE
-                || matches!(
-                    httparse::Request::new(&mut empty_headers).parse(&buf[..]),
-                    Ok(_) | Err(httparse::Error::TooManyHeaders)
-                );
-        }
+    if let Ok(num_bytes) = poll_fn(|cx| tcp_stream.poll_peek(cx, &mut buf)).await? {
         if num_bytes == 0 {
             debug!("Stream closed without data.");
-            return false;
+            false
+        } else {
+            buf[1..num_bytes] == H2_PREFACE[1..num_bytes]
+                || matches!(
+                    httparse::Request::new(&mut empty_headers).parse(&buf[1..num_bytes]),
+                    Ok(_) | Err(httparse::Error::TooManyHeaders)
+                )
         }
-        // Make the waiting less busy.
-        sleep(Duration::from_micros(100)); // TODO: how much should we sleep?
+    } else {
+        false
     }
-    false
 }
 
 const MINIMAL_HTTP1_REQUEST: &str = "GET / HTTP/1.1";
