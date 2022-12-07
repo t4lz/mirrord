@@ -2,24 +2,30 @@ use std::{
     io,
     net::{Ipv4Addr, SocketAddr},
 };
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 use bytes::Bytes;
-use mirrord_protocol::{
-    tcp::{NewTcpConnection, TcpClose},
-    ResponseError::PortAlreadyStolen,
-};
+use futures::SinkExt;
+use mirrord_protocol::{tcp::{NewTcpConnection, TcpClose}, ResponseError::PortAlreadyStolen, Port, ConnectionId};
 use iptables::IPTables;
 use streammap_ext::StreamMap;
-use tokio::{
-    io::{AsyncWriteExt, ReadHalf, WriteHalf},
-    net::TcpStream,
-};
+use tokio::{io::{AsyncWriteExt, ReadHalf, WriteHalf}, net::TcpStream, select};
+use tokio::net::TcpListener;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
-use tracing::error;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, warn};
+use mirrord_protocol::tcp::{DaemonTcp, TcpData};
 
-use super::*;
 use crate::AgentError::AgentInvariantViolated;
+use crate::{AgentError, ClientCommand, ClientId, IndexAllocator};
+use crate::runtime::set_namespace;
+use crate::util::Subscriptions;
+use crate::error::Result;
+use crate::steal::api::StealerCommand;
+use crate::steal::ip_tables::SafeIpTables;
 
 /// Created once per agent during initialization.
 ///
@@ -34,7 +40,7 @@ pub(crate) struct TcpConnectionStealer {
     /// Communication between (agent -> stealer) task.
     ///
     /// The agent controls the stealer task through [`TcpStealerAPI::command_tx`].
-    command_rx: Receiver<StealerCommand>,
+    command_rx: Receiver<ClientCommand<StealerCommand>>,
 
     /// Connected clients (layer instances) and the channels which the stealer task uses to send
     /// back messages (stealer -> agent -> layer).
@@ -66,7 +72,7 @@ impl TcpConnectionStealer {
     /// task (call [`TcpConnectionStealer::start`] to do so).
     #[tracing::instrument(level = "trace")]
     pub(crate) async fn new(
-        command_rx: Receiver<StealerCommand>,
+        command_rx: Receiver<ClientCommand<StealerCommand>>,
         pid: Option<u64>,
     ) -> Result<Self, AgentError> {
         if let Some(pid) = pid {
@@ -196,7 +202,7 @@ impl TcpConnectionStealer {
         &mut self,
         (stream, address): (TcpStream, SocketAddr),
     ) -> Result<(), AgentError> {
-        let real_address = orig_dst::orig_dst_addr(&stream)?;
+        let real_address = super::orig_dst::orig_dst_addr(&stream)?;
 
         // Get the first client that is subscribed to this port and give it the new connection.
         if let Some(client_id) = self
@@ -355,18 +361,18 @@ impl TcpConnectionStealer {
 
     /// Handles [`Command`]s that were received by [`TcpConnectionStealer::command_rx`].
     #[tracing::instrument(level = "trace", skip(self))]
-    async fn handle_command(&mut self, command: StealerCommand) -> Result<(), AgentError> {
-        let StealerCommand { client_id, command } = command;
+    async fn handle_command(&mut self, command: ClientCommand<StealerCommand>) -> Result<(), AgentError> {
+        let ClientCommand { client_id, command } = command;
 
         match command {
-            Command::NewClient(daemon_tx) => self.new_client(client_id, daemon_tx),
-            Command::ConnectionUnsubscribe(connection_id) => {
+            StealerCommand::NewClient(daemon_tx) => self.new_client(client_id, daemon_tx),
+            StealerCommand::ConnectionUnsubscribe(connection_id) => {
                 self.connection_unsubscribe(connection_id)
             }
-            Command::PortSubscribe(port) => self.port_subscribe(client_id, port).await?,
-            Command::PortUnsubscribe(port) => self.port_unsubscribe(client_id, port)?,
-            Command::ClientClose => self.close_client(client_id)?,
-            Command::ResponseData(tcp_data) => self.forward_data(tcp_data).await?,
+            StealerCommand::PortSubscribe(port) => self.port_subscribe(client_id, port).await?,
+            StealerCommand::PortUnsubscribe(port) => self.port_unsubscribe(client_id, port)?,
+            StealerCommand::ClientClose => self.close_client(client_id)?,
+            StealerCommand::ResponseData(tcp_data) => self.forward_data(tcp_data).await?,
         }
 
         Ok(())

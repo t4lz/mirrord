@@ -36,9 +36,10 @@ use tracing_subscriber::{fmt::format::FmtSpan, prelude::*};
 use crate::{
     cli::Args,
     runtime::{get_container, Container, ContainerRuntime},
-    steal::{connection::TcpConnectionStealer, StealerCommand},
+    steal::{TcpConnectionStealer, StealerCommand},
     util::{run_thread, ClientId, IndexAllocator},
 };
+use crate::tcp_api::ClientCommand;
 
 mod cli;
 mod dns;
@@ -50,6 +51,7 @@ mod runtime;
 mod sniffer;
 mod steal;
 mod util;
+mod tcp_api;
 
 const CHANNEL_SIZE: usize = 1024;
 
@@ -163,7 +165,7 @@ impl ClientConnectionHandler {
         pid: Option<u64>,
         ephemeral: bool,
         sniffer_command_sender: Sender<SnifferCommand>,
-        stealer_command_sender: Sender<StealerCommand>,
+        stealer_command_sender: Sender<ClientCommand<StealerCommand>>,
         dns_sender: Sender<DnsRequest>,
     ) -> Result<Self> {
         let file_manager = match pid {
