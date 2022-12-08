@@ -171,7 +171,10 @@ impl TcpConnectionStealer {
                     Err(AgentError::IO(fail))
                 }
             })
-            .unwrap_or(Ok(DaemonTcp::Close(TcpClose { connection_id })))?;
+            .unwrap_or_else(|| {
+                self.connection_unsubscribe(connection_id);
+                Ok(DaemonTcp::Close(TcpClose { connection_id }))
+            })?;
 
         if let Some(daemon_tx) = self
             .connection_client
