@@ -1,6 +1,5 @@
 use std::{
     collections::HashSet,
-    io,
     net::{Ipv4Addr, SocketAddr},
 };
 
@@ -138,9 +137,11 @@ impl TcpConnectionStealer {
                     }
                 }
                 Some((connection_id, incoming_data)) = self.read_streams.next() => {
-                    // TODO: Should we spawn a task to forward the data?
-                    if let Err(fail) = self.forward_incoming_tcp_data(connection_id, incoming_data).await {
-                        error!("Failed reading incoming tcp data with {fail:#?}!");
+                    match incoming_data.transpose() {
+                        Ok(optional_bytes) => self.forward_incoming_tcp_data_or_log_error(connection_id, optional_bytes).await,
+                        Err(err) => {
+                            error!("connection id {connection_id:?} read error: {err:?}");
+                        },
                     }
                 }
                 _ = cancellation_token.cancelled() => {
@@ -152,29 +153,37 @@ impl TcpConnectionStealer {
         Ok(())
     }
 
-    /// Forwards data from a remote stream to the client with `connection_id`.
+    /// Forwards data from a remote stream to the client with `connection_id` or logs error.
     #[tracing::instrument(level = "trace", skip(self))]
-    async fn forward_incoming_tcp_data(
+    async fn forward_incoming_tcp_data_or_log_error(
         &mut self,
         connection_id: ConnectionId,
-        incoming_data: Option<Result<Bytes, io::Error>>,
+        incoming_data: Option<Bytes>,
+    ) {
+        // TODO: Should we spawn a task to forward the data?
+        if let Err(fail) = self
+            .try_forward_incoming_tcp_data(connection_id, incoming_data)
+            .await
+        {
+            error!("Failed reading incoming tcp data with {fail:#?}!");
+        }
+    }
+
+    /// Forwards data from a remote stream to the client with `connection_id` or propagates error.
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn try_forward_incoming_tcp_data(
+        &mut self,
+        connection_id: ConnectionId,
+        incoming_data: Option<Bytes>,
     ) -> Result<(), AgentError> {
         // Create a message to send to the client, or propagate an error.
-        let daemon_tcp_message = incoming_data
-            .map(|incoming_data_result| match incoming_data_result {
-                Ok(bytes) => Ok(DaemonTcp::Data(TcpData {
-                    connection_id,
-                    bytes: bytes.to_vec(),
-                })),
-                Err(fail) => {
-                    error!("connection id {connection_id:?} read error: {fail:?}");
-                    Err(AgentError::IO(fail))
-                }
-            })
-            .unwrap_or_else(|| {
-                self.connection_unsubscribe(connection_id);
-                Ok(DaemonTcp::Close(TcpClose { connection_id }))
-            })?;
+        let daemon_tcp_message = match incoming_data {
+            Some(bytes) => DaemonTcp::Data(TcpData {
+                connection_id,
+                bytes: bytes.to_vec(),
+            }),
+            None => DaemonTcp::Close(TcpClose { connection_id }),
+        };
 
         if let Some(daemon_tx) = self
             .connection_clients
