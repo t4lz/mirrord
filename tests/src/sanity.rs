@@ -3,6 +3,7 @@
 
 mod tests {
     use std::{
+        cmp::max,
         collections::HashMap,
         fmt::Debug,
         net::{Ipv4Addr, UdpSocket},
@@ -125,11 +126,29 @@ mod tests {
             assert!(!self.stderr.lock().unwrap().contains("FAILED"));
         }
 
+        /// Check stdout for string, assuming it was already searched until the `covered` position.
+        /// Update `covered` to new stdout length.
+        fn search_str_in_stdout(&self, covered: &mut usize, searched_for: &str) -> bool {
+            let stdout_mutex = self.stdout.lock().unwrap();
+            let stdout = stdout_mutex.as_str();
+            let len = stdout.len();
+            if &len == covered {
+                return false; // No new bytes, if string were there, should have been found already.
+            }
+            let old_covered = *covered;
+            *covered = len;
+
+            // Don't include covered positions in search.
+            // Start one position after the string's length before the end.
+            // All earlier positions were already covered.
+            stdout[max(old_covered - searched_for.len() + 1, 0)..].contains(searched_for)
+        }
+
         fn wait_for_line(&self, timeout: Duration, line: &str) {
             let now = std::time::Instant::now();
+            let mut covered = 0;
             while now.elapsed() < timeout {
-                let stdout = self.get_stdout();
-                if stdout.contains(line) {
+                if self.search_str_in_stdout(&mut covered, line) {
                     return;
                 }
             }
