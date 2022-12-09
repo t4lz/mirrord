@@ -176,16 +176,20 @@ impl TcpConnectionStealer {
         connection_id: ConnectionId,
         incoming_data: Option<Bytes>,
     ) -> Result<(), AgentError> {
+        let mut closed = false;
         // Create a message to send to the client, or propagate an error.
         let daemon_tcp_message = match incoming_data {
             Some(bytes) => DaemonTcp::Data(TcpData {
                 connection_id,
                 bytes: bytes.to_vec(),
             }),
-            None => DaemonTcp::Close(TcpClose { connection_id }),
+            None => {
+                closed = true;
+                DaemonTcp::Close(TcpClose { connection_id })
+            },
         };
 
-        if let Some(daemon_tx) = self
+        let res = if let Some(daemon_tx) = self
             .connection_clients
             .get(&connection_id)
             .and_then(|client_id| self.clients.get(client_id))
@@ -199,7 +203,11 @@ impl TcpConnectionStealer {
             );
             debug_assert!(false);
             Ok(())
+        };
+        if closed {
+            self.connection_unsubscribe(connection_id);
         }
+        res
     }
 
     /// Handles a new remote connection that was accepted on the [`TcpConnectionStealer::stealer`]
