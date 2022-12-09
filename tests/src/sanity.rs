@@ -83,7 +83,8 @@ mod tests {
 
     #[derive(Debug)]
     pub enum Agent {
-        #[cfg(target_os = "linux")]
+        // TODO: uncomment or delete.
+        // #[cfg(target_os = "linux")]
         Ephemeral,
         Job,
     }
@@ -229,7 +230,8 @@ mod tests {
     impl Agent {
         fn flag(&self) -> Option<Vec<&str>> {
             match self {
-                #[cfg(target_os = "linux")]
+                // TODO: uncomment or delete
+                // #[cfg(target_os = "linux")]
                 Agent::Ephemeral => Some(vec!["--ephemeral-container"]),
                 Agent::Job => None,
             }
@@ -952,7 +954,8 @@ mod tests {
         process.assert_stderr();
     }
 
-    #[cfg(target_os = "linux")]
+    // TODO: uncomment or delete
+    // #[cfg(target_os = "linux")]
     #[rstest]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[timeout(Duration::from_secs(240))]
