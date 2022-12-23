@@ -35,15 +35,14 @@ pub struct NetworkConfig {
     ///
     /// - `mirror`: mirror incoming requests to the remote pod to the local process;
     /// - `steal`: redirect incoming requests to the remote pod to the local process
-    #[config(env = "MIRRORD_AGENT_TCP_STEAL_TRAFFIC", default)]
+    #[config(env = "MIRRORD_AGENT_TCP_STEAL_TRAFFIC", default, toggleable, nested)]
     pub incoming: IncomingConfig,
 
     // TODO: Test this field in unit tests.
     // TODO: Put inside `IncomingConfig::Steal` so that it cannot exist without steal being on?
     // TODO: Verify regex compiles.
-    #[config(env = "MIRRORD_HTTP_FILTER")]
-    pub http_filter: Option<String>,
-
+    // #[config(env = "MIRRORD_HTTP_FILTER")]
+    // pub http_filter: Option<String>,
     /// Tunnel outgoing network operations through mirrord.
     #[config(toggleable, nested)]
     pub outgoing: OutgoingConfig,
@@ -67,7 +66,6 @@ impl MirrordToggleableConfig for NetworkFileConfig {
             incoming,
             dns,
             outgoing: OutgoingFileConfig::disabled_config()?,
-            http_filter: None,
         })
     }
 }
@@ -76,12 +74,12 @@ impl MirrordToggleableConfig for NetworkFileConfig {
 mod tests {
     use rstest::rstest;
 
-    use super::*;
+    use super::{super::incoming::StealConfig, *};
     use crate::{config::MirrordConfig, util::testing::with_env_vars};
 
     #[rstest]
     fn default(
-        #[values((None, IncomingConfig::Mirror), (Some("false"), IncomingConfig::Mirror), (Some("true"), IncomingConfig::Steal))]
+        #[values((None, IncomingConfig::Mirror), (Some("false"), IncomingConfig::Mirror), (Some("true"), IncomingConfig::Steal(StealConfig::All)))]
         incoming: (Option<&str>, IncomingConfig),
         #[values((None, true), (Some("false"), false))] dns: (Option<&str>, bool),
     ) {

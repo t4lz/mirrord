@@ -34,6 +34,9 @@ pub enum ConfigError {
 
     #[error("Invalid FS mode `{0}`!")]
     InvalidFsMode(String),
+
+    #[error("could not parse HTTP filter regex: {0}.")]
+    HttpFilter(#[from] fancy_regex::Error),
 }
 
 pub type Result<T, E = ConfigError> = std::result::Result<T, E>;

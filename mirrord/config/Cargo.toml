@@ -23,6 +23,7 @@ thiserror.workspace = true
 serde_yaml = "0.9"
 toml = "0.5"
 schemars = { version = "0.8.11" }
+fancy-regex.workspace = true
 
 [dev-dependencies]
 rstest = "0.15"

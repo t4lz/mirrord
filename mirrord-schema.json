@@ -414,10 +414,25 @@
       ]
     },
     "IncomingConfig": {
-      "type": "string",
-      "enum": [
-        "mirror",
-        "steal"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "mirror"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "steal"
+          ],
+          "properties": {
+            "steal": {
+              "$ref": "#/definitions/StealConfig"
+            }
+          },
+          "additionalProperties": false
+        }
       ]
     },
     "NetworkFileConfig": {
@@ -431,17 +446,11 @@
             "null"
           ]
         },
-        "http_filter": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "incoming": {
           "description": "Mode of operation for incoming network requests in mirrord, supports `mirror` or `steal`:\n\n- `mirror`: mirror incoming requests to the remote pod to the local process; - `steal`: redirect incoming requests to the remote pod to the local process",
           "anyOf": [
             {
-              "$ref": "#/definitions/IncomingConfig"
+              "$ref": "#/definitions/ToggleableConfig_for_IncomingConfig"
             },
             {
               "type": "null"
@@ -526,6 +535,28 @@
         }
       }
     },
+    "StealConfig": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "all"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "httpheaderfilter"
+          ],
+          "properties": {
+            "httpheaderfilter": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "Target": {
       "description": "Specifies the running pod (or deployment) to mirror.\n\nSupports: - `pod/{sample-pod}`; - `podname/{sample-pod}`; - `deployment/{sample-deployment}`; - `container/{sample-container}`; - `containername/{sample-container}`.\n\n## Examples\n\n- Mirror pod `hello-world-abcd-1234`:\n\n```toml # mirrord-config.toml\n\ntarget = \"pod/hello-world-abcd-1234\" ```",
       "anyOf": [
@@ -600,6 +631,16 @@
         },
         {
           "$ref": "#/definitions/FsUserConfig"
+        }
+      ]
+    },
+    "ToggleableConfig_for_IncomingConfig": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "$ref": "#/definitions/IncomingConfig"
         }
       ]
     },

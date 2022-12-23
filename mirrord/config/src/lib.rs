@@ -339,8 +339,7 @@ mod tests {
                 fs: ToggleableConfig::Config(FsUserConfig::Simple(FsModeConfig::Write)).into(),
                 network: Some(ToggleableConfig::Config(NetworkFileConfig {
                     dns: Some(false),
-                    incoming: Some(IncomingConfig::Mirror),
-                    http_filter: None,
+                    incoming: Some(ToggleableConfig::Config(IncomingConfig::Mirror)),
                     outgoing: Some(ToggleableConfig::Config(OutgoingFileConfig {
                         tcp: Some(true),
                         udp: Some(false),

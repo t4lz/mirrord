@@ -420,7 +420,7 @@ async fn thread_loop(
         tx,
         rx,
         config.feature.network.incoming.is_steal(),
-        config.feature.network.http_filter,
+        config.feature.network.incoming.get_http_filter(),
     );
     loop {
         select! {

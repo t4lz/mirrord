@@ -1940,6 +1940,7 @@ name = "mirrord-config"
 version = "3.14.3"
 dependencies = [
  "anyhow",
+ "fancy-regex",
  "mirrord-config-derive",
  "rstest 0.15.0",
  "schemars",
