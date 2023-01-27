@@ -393,6 +393,11 @@ jobs:
       - run: pip3 install uvicorn[standard] # For http mirroring test with FastAPI.
       - run: cargo build -p mirrord-layer # Build layer lib. The tests load it into the apps.
       - run: cargo test -p mirrord-layer
+      - uses: actions/setup-node@v3 # this newer node version uses `posix_spawn` instead of `execve`. Test that detour.
+        with:
+          node-version: 19
+      - run: npm install express
+      - run: cargo test --test http_mirroring test_mirroring_with_http # test again, with node 19.
 
   e2e:
     runs-on: ubuntu-latest
