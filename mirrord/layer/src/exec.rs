@@ -20,7 +20,6 @@ use crate::{
         Detour::{Bypass, Error, Success},
     },
     error::HookError,
-    exec::patched_args::PatchedArgs,
     file::ops::str_from_rawish,
     hooks::HookManager,
     replace,
@@ -121,57 +120,51 @@ fn intercept_tmp_dir(argv_arr: &Nul<*const c_char>) -> Detour<Vec<*const c_char>
     Bypass(TempDirEnvVarNotSet) // Temp dir was not set. Cannot intercept. Should not happen.
 }
 
-mod patched_args {
-    use std::ffi::CString;
+/// The arguments for `execve` or `posix_spawn` after patching the for side-stepping SIP.
+/// Since the arguments for those functions are pointers, if we indeed modify the arguments, we
+/// create new objects, so we have to keep them alive, so we put them in this struct, and the
+/// detour code has to hold on to this struct until after the call to the original libc
+/// functions.
+pub struct PatchedArgs {
+    original_path: *const c_char,
+    path_c_string: Option<CString>,
+    original_argv: *const *const c_char,
+    argv_vec: Option<Vec<*const c_char>>,
+}
 
-    use libc::c_char;
-
-    /// The arguments for `execve` or `posix_spawn` after patching the for side-stepping SIP.
-    /// Since the arguments for those functions are pointers, if we indeed modify the arguments, we
-    /// create new objects, so we have to keep them alive, so we put them in this struct, and the
-    /// detour code has to hold on to this struct until after the call to the original libc
-    /// functions.
-    pub struct PatchedArgs {
+impl PatchedArgs {
+    pub fn new(
         original_path: *const c_char,
         path_c_string: Option<CString>,
         original_argv: *const *const c_char,
         argv_vec: Option<Vec<*const c_char>>,
+    ) -> Self {
+        Self {
+            original_path,
+            path_c_string,
+            original_argv,
+            argv_vec,
+        }
     }
 
-    impl PatchedArgs {
-        pub fn new(
-            original_path: *const c_char,
-            path_c_string: Option<CString>,
-            original_argv: *const *const c_char,
-            argv_vec: Option<Vec<*const c_char>>,
-        ) -> Self {
-            Self {
-                original_path,
-                path_c_string,
-                original_argv,
-                argv_vec,
-            }
-        }
+    /// Get the (maybe patched) path that should be executed.
+    pub fn get_path(&self) -> *const c_char {
+        // If we created a new string return a pointer to that, otherwise just the original
+        // pointer.
+        self.path_c_string
+            .as_ref()
+            .map(|path| path.as_ptr())
+            .unwrap_or(self.original_path)
+    }
 
-        /// Get the (maybe patched) path that should be executed.
-        pub fn get_path(&self) -> *const c_char {
-            // If we created a new string return a pointer to that, otherwise just the original
-            // pointer.
-            self.path_c_string
-                .as_ref()
-                .map(|path| path.as_ptr())
-                .unwrap_or(self.original_path)
-        }
-
-        /// Get the (maybe changed) argv.
-        pub fn get_argv(&self) -> *const *const c_char {
-            // If we created a new array return a pointer to that, otherwise just the original
-            // pointer.
-            self.argv_vec
-                .as_ref()
-                .map(|argv| argv.as_ptr())
-                .unwrap_or(self.original_argv)
-        }
+    /// Get the (maybe changed) argv.
+    pub fn get_argv(&self) -> *const *const c_char {
+        // If we created a new array return a pointer to that, otherwise just the original
+        // pointer.
+        self.argv_vec
+            .as_ref()
+            .map(|argv| argv.as_ptr())
+            .unwrap_or(self.original_argv)
     }
 }
 
@@ -218,7 +211,7 @@ pub(crate) unsafe extern "C" fn execve_detour(
     envp: *const *const c_char,
 ) -> c_int {
     let patched_args = patch_sip_for_new_process(path, argv);
-    FN_EXECVE(patched_args.get_path(), patched_args.get_argv(), envp)
+    FN_EXECVE(patched_args.original_path, patched_args.get_argv(), envp)
 }
 
 // TODO: do we also need to hook posix_spawnp?
