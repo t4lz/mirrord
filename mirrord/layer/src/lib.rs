@@ -793,7 +793,9 @@ pub(crate) fn close_layer_fd(fd: c_int) {
     // Remove from sockets, or if not a socket, remove from files if file mode active
     SOCKETS.lock().unwrap().remove(&fd).is_none().then(|| {
         if file_mode_active {
+            trace!("Locking OPEN_FILES.");
             OPEN_FILES.lock().unwrap().remove(&fd);
+            trace!("Done with OPEN_FILES.");
         }
     });
     trace!("Done with SOCKETS.");
