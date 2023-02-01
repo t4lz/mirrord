@@ -24,6 +24,7 @@ mod file_ops {
             // FileOps::Rust
         )]
         ops: FileOps,
+        #[values(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)] _run_num: u8,
     ) {
         let service = service.await;
         let _ = std::fs::create_dir(std::path::Path::new("/tmp/fs"));
