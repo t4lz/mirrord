@@ -115,6 +115,7 @@ jobs:
     if: ${{needs.changed_files.outputs.rs_changed == 'true'}}
     env:
       MIRRORD_AGENT_RUST_LOG: "warn,mirrord=debug"
+      RUST_BACKTRACE: "1"
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
