@@ -75,8 +75,12 @@ func createTempFile() string {
 }
 
 func main() {
+    fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~ Testing Read ~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	TestRead()
+    fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~ Testing Write ~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	TestWrite()
+    fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~ Testing LSeek ~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	TestLseek()
+    fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~ Testing FAccessAt ~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	TestFaccessat()
 }
