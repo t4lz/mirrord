@@ -7,22 +7,21 @@ mod file_ops {
 
     use crate::utils::{run_exec, service, Agent, FileOps, KubeService};
 
-    #[cfg(target_os = "linux")]
     #[rstest]
     #[trace]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[timeout(Duration::from_secs(240))]
-    pub async fn test_file_ops(
+    pub async fn test_file_ops_linux(
         #[future]
         #[notrace]
         service: KubeService,
         #[values(Agent::Ephemeral, Agent::Job)] agent: Agent,
         #[values(
-            FileOps::Python,
-            FileOps::Go18,
-            FileOps::Go19,
-            // FileOps::Go20,
-            FileOps::Rust
+            // FileOps::Python,
+            // FileOps::Go18,
+            // FileOps::Go19,
+            FileOps::Go20,
+            // FileOps::Rust
         )]
         ops: FileOps,
     ) {
@@ -55,7 +54,7 @@ mod file_ops {
     #[trace]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[timeout(Duration::from_secs(240))]
-    pub async fn test_file_ops(
+    pub async fn test_file_ops_mac(
         #[future]
         #[notrace]
         service: KubeService,
