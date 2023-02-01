@@ -10,7 +10,7 @@ mod file_ops {
     #[rstest]
     #[trace]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[timeout(Duration::from_secs(240))]
+    #[timeout(Duration::from_secs(60))]
     pub async fn test_file_ops_linux(
         #[future]
         #[notrace]
