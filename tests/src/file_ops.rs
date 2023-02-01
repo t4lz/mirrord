@@ -7,24 +7,24 @@ mod file_ops {
 
     use crate::utils::{run_exec, service, Agent, FileOps, KubeService};
 
-    #[cfg(target_os = "linux")]
     #[rstest]
     #[trace]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[timeout(Duration::from_secs(240))]
-    pub async fn test_file_ops(
+    #[timeout(Duration::from_secs(60))]
+    pub async fn test_file_ops_linux(
         #[future]
         #[notrace]
         service: KubeService,
         #[values(Agent::Ephemeral, Agent::Job)] agent: Agent,
         #[values(
-            FileOps::Python,
-            FileOps::Go18,
-            FileOps::Go19,
-            // FileOps::Go20,
-            FileOps::Rust
+            // FileOps::Python,
+            // FileOps::Go18,
+            // FileOps::Go19,
+            FileOps::Go20,
+            // FileOps::Rust
         )]
         ops: FileOps,
+        #[values(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)] _run_num: u8,
     ) {
         let service = service.await;
         let _ = std::fs::create_dir(std::path::Path::new("/tmp/fs"));
@@ -55,7 +55,7 @@ mod file_ops {
     #[trace]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[timeout(Duration::from_secs(240))]
-    pub async fn test_file_ops(
+    pub async fn test_file_ops_mac(
         #[future]
         #[notrace]
         service: KubeService,

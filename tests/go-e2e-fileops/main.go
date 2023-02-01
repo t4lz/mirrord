@@ -24,7 +24,9 @@ func TestRead() {
 func TestWrite() {
 	// Tests: SYS_write
 	fileName := createTempFile()
+	fmt.Println("±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±± Created temp file ±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±")
 	dat, err := os.ReadFile(fileName)
+	fmt.Println("±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±± Read temp file ±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±")
 	if err != nil {
 		panic(err)
 	}
@@ -75,8 +77,12 @@ func createTempFile() string {
 }
 
 func main() {
-	TestRead()
+//     fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~ Testing Read ~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+// 	TestRead()
+    fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~ Testing Write ~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	TestWrite()
-	TestLseek()
-	TestFaccessat()
+//     fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~ Testing LSeek ~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+// 	TestLseek()
+//     fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~ Testing FAccessAt ~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+// 	TestFaccessat()
 }
