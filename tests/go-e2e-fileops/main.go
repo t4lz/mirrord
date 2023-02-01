@@ -24,7 +24,9 @@ func TestRead() {
 func TestWrite() {
 	// Tests: SYS_write
 	fileName := createTempFile()
+	fmt.Println("±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±± Created temp file ±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±")
 	dat, err := os.ReadFile(fileName)
+	fmt.Println("±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±± Read temp file ±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±")
 	if err != nil {
 		panic(err)
 	}
