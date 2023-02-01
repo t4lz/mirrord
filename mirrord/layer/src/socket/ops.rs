@@ -97,6 +97,7 @@ pub(super) fn socket(domain: c_int, type_: c_int, protocol: c_int) -> Detour<Raw
         kind: socket_kind,
     };
 
+    trace!("Locking SOCKETS 1.");
     let mut sockets = SOCKETS.lock()?;
     sockets.insert(socket_fd, Arc::new(new_socket));
 
@@ -119,6 +120,7 @@ pub(super) fn bind(
     }
 
     let mut socket = {
+        trace!("Locking SOCKETS 2.");
         SOCKETS
             .lock()?
             .remove(&sockfd)
@@ -179,6 +181,7 @@ pub(super) fn bind(
         address,
     });
 
+    trace!("Locking SOCKETS 3.");
     SOCKETS.lock()?.insert(sockfd, socket);
 
     Detour::Success(bind_result)
@@ -189,6 +192,7 @@ pub(super) fn bind(
 #[tracing::instrument(level = "trace")]
 pub(super) fn listen(sockfd: RawFd, backlog: c_int) -> Detour<i32> {
     let mut socket: Arc<UserSocket> = {
+        trace!("Locking SOCKETS 4.");
         SOCKETS
             .lock()?
             .remove(&sockfd)
@@ -219,6 +223,7 @@ pub(super) fn listen(sockfd: RawFd, backlog: c_int) -> Detour<i32> {
                 address,
             });
 
+            trace!("Locking SOCKETS 5.");
             SOCKETS.lock()?.insert(sockfd, socket);
 
             Detour::Success(listen_result)
@@ -287,6 +292,7 @@ fn connect_outgoing<const TYPE: ConnectType>(
     };
 
     Arc::get_mut(&mut user_socket_info).unwrap().state = SocketState::Connected(connected);
+    trace!("Locking SOCKETS 6.");
     SOCKETS.lock()?.insert(sockfd, user_socket_info);
 
     Detour::Success(connect_result)
@@ -314,6 +320,7 @@ pub(super) fn connect(
     }
 
     let user_socket_info = {
+        trace!("Locking SOCKETS 7.");
         SOCKETS
             .lock()?
             .remove(&sockfd)
@@ -349,6 +356,7 @@ pub(super) fn connect(
 
     // if it's loopback, check if it's a port we're listening to and if so, just let it connect
     // locally.
+    trace!("Locking SOCKETS 8.");
     if remote_address.ip().is_loopback() && let Some(res) =
         SOCKETS.lock()?.values().find_map(|socket| {
             if let SocketState::Listening(Bound {
@@ -407,6 +415,7 @@ pub(super) fn getpeername(
     address_len: *mut socklen_t,
 ) -> Detour<i32> {
     let remote_address = {
+        trace!("Locking SOCKETS 9.");
         SOCKETS
             .lock()?
             .get(&sockfd)
@@ -429,6 +438,7 @@ pub(super) fn getsockname(
     address_len: *mut socklen_t,
 ) -> Detour<i32> {
     let local_address = {
+        trace!("Locking SOCKETS 10.");
         SOCKETS
             .lock()?
             .get(&sockfd)
@@ -457,6 +467,7 @@ pub(super) fn accept(
     new_fd: RawFd,
 ) -> Detour<RawFd> {
     let (local_address, domain, protocol, type_) = {
+        trace!("Locking SOCKETS 11.");
         SOCKETS
             .lock()?
             .get(&sockfd)
@@ -489,6 +500,7 @@ pub(super) fn accept(
     };
     fill_address(address, address_len, remote_address)?;
 
+    trace!("Locking SOCKETS 12.");
     SOCKETS.lock()?.insert(new_fd, Arc::new(new_socket));
 
     Detour::Success(new_fd)
@@ -504,6 +516,7 @@ pub(super) fn fcntl(orig_fd: c_int, cmd: c_int, fcntl_fd: i32) -> Result<(), Hoo
 
 #[tracing::instrument(level = "trace")]
 pub(super) fn dup(fd: c_int, dup_fd: i32) -> Result<(), HookError> {
+    trace!("Locking SOCKETS 13.");
     let mut sockets = SOCKETS.lock()?;
     if let Some(socket) = sockets.get(&fd).cloned() {
         sockets.insert(dup_fd as RawFd, socket);
