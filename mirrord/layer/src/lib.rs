@@ -782,17 +782,21 @@ fn enable_hooks(enabled_file_ops: bool, enabled_remote_dns: bool) {
 /// Removes the `fd` key from either [`SOCKETS`] or [`OPEN_FILES`].
 pub(crate) fn close_layer_fd(fd: c_int) {
     trace!("Closing fd {}", fd);
+    trace!("Acquiring FILE_MODE.");
     let file_mode_active = FILE_MODE
         .get()
         .expect("Should be set during initialization!")
         .is_active();
+    trace!("Successfully got FILE_MODE.");
 
+    trace!("Locking SOCKETS.");
     // Remove from sockets, or if not a socket, remove from files if file mode active
     SOCKETS.lock().unwrap().remove(&fd).is_none().then(|| {
         if file_mode_active {
             OPEN_FILES.lock().unwrap().remove(&fd);
         }
     });
+    trace!("Done with SOCKETS.");
 }
 
 // TODO: When this is annotated with `hook_guard_fn`, then the outgoing sockets never call it (we
