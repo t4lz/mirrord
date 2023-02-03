@@ -30,6 +30,7 @@ impl RemoteFile {
 
 impl Drop for RemoteFile {
     fn drop(&mut self) {
+        println!("dropping RemoteFile {self:?}");
         // Warning: Don't log from here. This is called when self is removed from OPEN_FILES, so
         // during the whole execution of this function, OPEN_FILES is locked.
         // When emitting logs, sometimes a file `write` operation is required, in order for the
