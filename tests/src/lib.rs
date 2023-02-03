@@ -178,7 +178,7 @@ mod utils {
                     }
 
                     let string = String::from_utf8_lossy(&buf[..n]);
-                    eprintln!("stderr {:?} {pid}: {}", Utc::now(), string);
+                    eprint!("{}", string);
                     {
                         stderr_data_reader.lock().unwrap().push_str(&string);
                     }
@@ -193,7 +193,7 @@ mod utils {
                         break;
                     }
                     let string = String::from_utf8_lossy(&buf[..n]);
-                    println!("stdout {:?} {pid}: {}", Utc::now(), string);
+                    println!("{}", string);
                     {
                         stdout_data_reader.lock().unwrap().push_str(&string);
                     }
