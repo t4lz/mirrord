@@ -63,7 +63,7 @@ macro_rules! should_ignore {
 /// `mirrord_agent::util::IndexAllocator`).
 fn get_remote_fd(local_fd: RawFd) -> Detour<u64> {
     println!("~~~~~~~~~~ Backtrace ~~~~~~~~~~");
-    println!("{:?}", Backtrace::new());
+    println!("{:?}", Backtrace::capture());
     println!("Locking OPEN_FILES 3.");
     let res = Detour::Success(
         OPEN_FILES
