@@ -539,10 +539,12 @@ pub(super) fn dup(fd: c_int, dup_fd: i32) -> Result<(), HookError> {
         trace!("Freeing SOCKETS 13.");
     } // Drop sockets, free Mutex.
 
+    trace!("Locking OPEN_FILES 10.");
     let mut files = OPEN_FILES.lock()?;
     if let Some(file) = files.get(&fd).cloned() {
         files.insert(dup_fd as RawFd, file);
     }
+    trace!("Freeing OPEN_FILES 10.");
     Ok(())
 }
 

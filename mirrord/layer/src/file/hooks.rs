@@ -474,8 +474,10 @@ pub(crate) unsafe extern "C" fn ferror_detour(file_stream: *mut FILE) -> c_int {
     // Extract the fd from stream and check if it's managed by us, or should be bypassed.
     let fd = fileno_logic(file_stream);
 
+    trace!("Locking OPEN_FILES 1.");
     // We're only interested in files that are handled by `mirrord-agent`.
     let remote_fd = OPEN_FILES.lock().unwrap().get(&fd).map(|file| file.fd);
+    trace!("Freeing OPEN_FILES 1.");
     if remote_fd.is_some() {
         std::io::Error::last_os_error()
             .raw_os_error()
@@ -507,9 +509,12 @@ pub(crate) unsafe extern "C" fn fileno_detour(file_stream: *mut FILE) -> c_int {
 unsafe fn fileno_logic(file_stream: *mut FILE) -> c_int {
     let local_fd = *(file_stream as *const _);
 
+    trace!("Locking OPEN_FILES 2.");
     if OPEN_FILES.lock().unwrap().contains_key(&local_fd) {
+        trace!("Freeing OPEN_FILES 2.");
         local_fd
     } else {
+        trace!("Freeing OPEN_FILES 2.");
         FN_FILENO(file_stream)
     }
 }
