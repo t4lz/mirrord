@@ -193,7 +193,7 @@ mod utils {
                         break;
                     }
                     let string = String::from_utf8_lossy(&buf[..n]);
-                    println!("{}", string);
+                    print!("{}", string);
                     {
                         stdout_data_reader.lock().unwrap().push_str(&string);
                     }
