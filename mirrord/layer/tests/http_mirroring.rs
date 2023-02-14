@@ -51,6 +51,8 @@ async fn test_mirroring_with_http(
 
     println!("Application subscribed to port, sending tcp messages.");
 
+    let put_request = format!("PUT / HTTP/1.1\r\nHost: localhost\r\n\r\n{:~>9999999}", "~");
+
     layer_connection
         .send_connection_then_data("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
         .await;
@@ -58,7 +60,7 @@ async fn test_mirroring_with_http(
         .send_connection_then_data("POST / HTTP/1.1\r\nHost: localhost\r\n\r\npost-data")
         .await;
     layer_connection
-        .send_connection_then_data("PUT / HTTP/1.1\r\nHost: localhost\r\n\r\nput-data")
+        .send_connection_then_data(&put_request)
         .await;
     layer_connection
         .send_connection_then_data("DELETE / HTTP/1.1\r\nHost: localhost\r\n\r\ndelete-data")

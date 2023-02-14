@@ -16,17 +16,17 @@ mod steal {
         service, tcp_echo_service, websocket_service, Agent, Application, KubeService,
     };
 
-    #[cfg(target_os = "linux")]
     #[rstest]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[timeout(Duration::from_secs(240))]
+    #[timeout(Duration::from_secs(60))]
     async fn test_steal_http_traffic(
         #[future] service: KubeService,
         #[future] kube_client: Client,
         #[values(
             // Application::PythonFlaskHTTP,
             Application::PythonFastApiHTTP,
-            Application::NodeHTTP
+            Application::NodeHTTP,
+            Application::Go20HTTP
         )]
         application: Application,
         #[values(Agent::Ephemeral, Agent::Job)] agent: Agent,

@@ -816,7 +816,7 @@ mod utils {
         .await;
 
         let client = reqwest::Client::new();
-        let req_builder = client.put(url);
+        let req_builder = client.put(url).body(format!("{:~>9999999}", "~"));
         send_request(
             req_builder,
             expect_response.then_some("PUT"),
