@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"io"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,6 +32,13 @@ func main() {
 		return func(c *gin.Context) {
 			fmt.Printf("%s: Request completed\n", method)
 			c.String(http.StatusOK, method)
+			data, err := io.ReadAll(c.Request.Body)
+			if err == nil {
+			    fmt.Printf("%s data:\n%s\n", method, data)
+			} else {
+			    fmt.Printf("Failed to read request data.")
+			}
+
 
 			mut_done.Lock()
 			first := !done[method] // Is this the first request of this method.
