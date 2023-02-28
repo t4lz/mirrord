@@ -1,0 +1,38 @@
+name: TEST-VSCODE
+
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore: [staging-squash-merge.tmp]
+  pull_request:
+    branches: [main, staging, trying]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Cancel previous runs on the same PR.
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test_vscode_ext:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 17
+          cache: "npm"
+          cache-dependency-path: vscode-ext/package-lock.json
+      # TypeScript set at 4.7.4 because @kubernetes/client-node 0.16.3 (and 0.17.0) breaks with version 4.8.2+
+      - run: npm install -g vsce typescript@4.7.4 esbuild
+      - run: mkdir -p /tmp/vscode-ext
+      - run: |
+          cd vscode-ext
+          npm install
+          tsc && vsce package -o /tmp/vscode-ext
+      - uses: actions/upload-artifact@v3
+        with:
+          name: vscode-ext
+          path: |
+            /tmp/vscode-ext
+          if-no-files-found: error
