@@ -288,7 +288,11 @@ mod traffic {
     #[rstest]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[timeout(Duration::from_secs(60))]
-    pub async fn go20_dns_lookup(#[future] service: KubeService) {
+    pub async fn go20_dns_lookup(
+        #[future] service: KubeService,
+        #[values(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)] _run_id: u8,
+        #[values(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)] _run_id_b: u8,
+    ) {
         let command = vec!["go-e2e-dns/20"];
         test_go(service, command).await;
     }
