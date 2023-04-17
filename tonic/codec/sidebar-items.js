@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DecodeBuf","EncodeBuf","ProstCodec","Streaming"],"trait":["Codec","Decoder","Encoder"]};
