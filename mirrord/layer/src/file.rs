@@ -235,7 +235,7 @@ impl FileHandler {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, tx))]
+    #[tracing::instrument(level = "debug", skip(self, tx))]
     pub(crate) async fn handle_hook_message(
         &mut self,
         message: FileOperation,
@@ -487,7 +487,7 @@ impl FileHandler {
         tx.send(request).await.map_err(From::from)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, tx))]
+    #[tracing::instrument(level = "debug", skip(self, tx))]
     async fn handle_hook_xstat(&mut self, xstat: Xstat, tx: &Sender<ClientMessage>) -> Result<()> {
         let Xstat {
             path,

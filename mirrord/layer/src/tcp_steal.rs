@@ -285,7 +285,7 @@ impl TcpStealHandler {
         ClientMessage::TcpSteal(LayerTcpSteal::ConnectionUnsubscribe(connection_id))
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self), ret)]
     pub async fn next(&mut self) -> Option<ClientMessage> {
         let (connection_id, value) = self.read_streams.next().await?;
         match value {

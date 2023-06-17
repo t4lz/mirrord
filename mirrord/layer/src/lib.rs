@@ -115,7 +115,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{sleep, Duration},
 };
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, prelude::*};
 
 use crate::{
@@ -601,6 +601,7 @@ impl Layer {
 
     /// Sends a [`ClientMessage`] through `Layer::tx` to the [`Receiver`] in
     /// [`wrap_raw_connection`](mirrord_kube::api::wrap_raw_connection).
+    #[tracing::instrument(level = "debug", skip(self), ret)]
     async fn send(&self, msg: ClientMessage) -> Result<(), ClientMessage> {
         self.tx.send(msg).await.map_err(|err| err.0)
     }
@@ -612,7 +613,7 @@ impl Layer {
     ///
     /// The [`HookMessage::GetAddrInfo`] message is dealt with here, we convert it to a
     /// [`ClientMessage::GetAddrInfoRequest`], and send it with [`Self::send`].
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn handle_hook_message(&mut self, hook_message: HookMessage) {
         match hook_message {
             HookMessage::Tcp(message) => {
@@ -768,9 +769,12 @@ async fn thread_loop(
         ..
     } = config;
     let mut layer = Layer::new(tx, rx, incoming);
+    debug!("Main loop! Check out the thread number.");
     loop {
+        debug!("Main loop iteration!");
         select! {
             hook_message = receiver.recv() => {
+                debug!("before calling handle_hook_message!");
                 layer.handle_hook_message(hook_message.unwrap()).await;
             }
             Some(tcp_outgoing_message) = layer.tcp_outgoing_handler.recv() => {
@@ -812,6 +816,7 @@ async fn thread_loop(
                 }
             },
             Some(message) = layer.tcp_steal_handler.next() => {
+                debug!("before sending message to layer!");
                 layer.send(message).await.unwrap();
             }
             Some(response) = layer.http_response_receiver.recv() => {
@@ -843,7 +848,12 @@ async fn start_layer_thread(
     receiver: Receiver<HookMessage>,
     config: LayerConfig,
 ) {
-    tokio::spawn(thread_loop(receiver, tx, rx, config));
+    let jh = tokio::spawn(thread_loop(receiver, tx, rx, config));
+    tokio::spawn(async move {
+        debug!("~~~~~~~~~~~~~~~~~~~~~~~~~~ started thread_loop_result task!");
+        let thread_loop_result = jh.await;
+        debug!("~~~~~~~~~~~~~~~~~~~~~~~~~~ thread_loop_result! {thread_loop_result:?}");
+    });
 }
 
 /// Prepares the [`HookManager`] and [`replace!`]s [`libc`] calls with our hooks, according to what

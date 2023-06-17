@@ -8,7 +8,7 @@ use mirrord_protocol::file::{
 };
 use rand::distributions::{Alphanumeric, DistString};
 use tokio::sync::oneshot;
-use tracing::{error, trace};
+use tracing::{error, log::debug, trace};
 
 use super::{filter::FILE_FILTER, hooks::FN_OPEN, *};
 use crate::{
@@ -439,7 +439,7 @@ pub(crate) fn access(path: Detour<PathBuf>, mode: u8) -> Detour<c_int> {
 /// that.
 /// rawish_path is Option<Option<&CStr>> because we need to differentiate between null pointer
 /// and non existing argument (For error handling)
-#[tracing::instrument(level = "trace")]
+#[tracing::instrument(level = "debug")]
 pub(crate) fn xstat(
     rawish_path: Option<Detour<PathBuf>>,
     fd: Option<RawFd>,
@@ -468,11 +468,15 @@ pub(crate) fn xstat(
         // lstat/stat
         (Some(path), None) => {
             let path = path?;
+            debug!("path: {path:?}.");
             if path.is_relative() {
+                debug!("path is relative.");
                 // Calls with non absolute paths are sent to libc::open.
                 return Detour::Bypass(Bypass::RelativePath(path));
             }
+            debug!("before should_ignore macro.");
             should_ignore!(path, false);
+            debug!("after should_ignore macro.");
             (Some(path), None)
         }
         // fstat
@@ -480,6 +484,8 @@ pub(crate) fn xstat(
         // can't happen
         (None, None) => return Detour::Error(HookError::NullPointer),
     };
+
+    debug!("path: {path:?}, fd: {fd:?}.");
 
     let (file_channel_tx, file_channel_rx) = oneshot::channel();
 
@@ -490,9 +496,18 @@ pub(crate) fn xstat(
         file_channel_tx,
     };
 
+    debug!("before sending file message.");
     blocking_send_file_message(FileOperation::Xstat(lstat))?;
+    debug!("after sending file message.");
 
-    Detour::Success(file_channel_rx.blocking_recv()??)
+    debug!("before blocking_recv.");
+    let res1 = file_channel_rx.blocking_recv();
+    debug!("blocking_recv result: {res1:?}.");
+    let res2 = res1?;
+
+    let res = res2?;
+
+    Detour::Success(res)
 }
 
 #[tracing::instrument(level = "trace")]
