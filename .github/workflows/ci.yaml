@@ -55,7 +55,6 @@ jobs:
         with:
           name: mirrord-artifacts
           path: target/debug/
-      - run: cargo build -p mirrord-layer # Build layer lib. The tests load it into the apps.
       - run: cargo test -p mirrord-layer fork
       - run: cargo test -p mirrord-layer fork
       - run: cargo test -p mirrord-layer fork
