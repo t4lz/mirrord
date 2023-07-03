@@ -831,7 +831,9 @@ async fn thread_loop(
         ..
     } = config;
     let mut layer = Layer::new(tx, rx, incoming);
+    let pid = std::process::id();
     loop {
+        debug!("layer loop iteration in pid {pid}");
         select! {
             hook_message = receiver.recv() => {
                 layer.handle_hook_message(hook_message.unwrap()).await;
