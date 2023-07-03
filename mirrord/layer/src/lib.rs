@@ -675,7 +675,7 @@ impl Layer {
     ///
     /// The [`HookMessage::GetAddrInfo`] message is dealt with here, we convert it to a
     /// [`ClientMessage::GetAddrInfoRequest`], and send it with [`Self::send`].
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn handle_hook_message(&mut self, hook_message: HookMessage) {
         match hook_message {
             HookMessage::Tcp(message) => {
