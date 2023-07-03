@@ -10,7 +10,10 @@ pub use common::*;
 #[rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[timeout(Duration::from_secs(60))]
-async fn fork(dylib_path: &PathBuf) {
+async fn fork(
+    dylib_path: &PathBuf,
+    #[values(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)] _run_id: u8,
+) {
     for _ in 0..42 {
         eprintln!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  TEST START  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
         fork_once(dylib_path).await;
