@@ -12,7 +12,9 @@ pub use common::*;
 #[timeout(Duration::from_secs(60))]
 async fn fork(dylib_path: &PathBuf) {
     for _ in 0..42 {
+        eprintln!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  TEST START  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
         fork_once(dylib_path).await;
+        eprintln!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~   TEST END   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
     }
 }
 
