@@ -8,7 +8,7 @@ use mirrord_protocol::file::{
 };
 use rand::distributions::{Alphanumeric, DistString};
 use tokio::sync::oneshot;
-use tracing::{error, trace};
+use tracing::{debug, error, trace};
 
 use super::{filter::FILE_FILTER, hooks::FN_OPEN, *};
 use crate::{
@@ -33,7 +33,7 @@ impl RemoteFile {
     }
 
     /// Sends a [`FileOperation::Open`] message, opening the file in the agent.
-    #[tracing::instrument(level = "trace")]
+    #[tracing::instrument(level = "trace", ret)]
     pub(crate) fn remote_open(
         path: PathBuf,
         open_options: OpenOptionsInternal,
@@ -45,7 +45,9 @@ impl RemoteFile {
             file_channel_tx,
         };
 
+        debug!("sending file hook message");
         blocking_send_file_message(FileOperation::Open(requesting_file))?;
+        debug!("sent file hook message");
 
         Detour::Success(file_channel_rx.blocking_recv()??)
     }
@@ -144,6 +146,7 @@ fn close_remote_file_on_failure(fd: u64) -> Result<()> {
     RemoteFile::remote_close(fd)
 }
 
+#[tracing::instrument(level = "debug", ret)]
 fn blocking_send_file_message(message: FileOperation) -> Result<()> {
     blocking_send_hook_message(HookMessage::File(message))
 }
