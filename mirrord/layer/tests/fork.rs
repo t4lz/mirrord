@@ -11,6 +11,12 @@ pub use common::*;
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[timeout(Duration::from_secs(60))]
 async fn fork(dylib_path: &PathBuf) {
+    for _ in 0..42 {
+        fork_once(dylib_path).await;
+    }
+}
+
+async fn fork_once(dylib_path: &PathBuf) {
     let application = Application::Fork;
     let (mut test_process, listener) = application
         .get_test_process_and_listener(dylib_path, Default::default(), None)
