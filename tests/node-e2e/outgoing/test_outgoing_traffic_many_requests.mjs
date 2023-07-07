@@ -55,13 +55,25 @@ function makeRequests() {
       throw fail;
     });
 
+    request.on("end", idk => {
+      console.log(`>> host ${host} END`);
+    });
+
+    request.on("finish", idk => {
+      console.log(`>> host ${host} FINISH`);
+    });
+
     request.end();
   });
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~ Done making requests.");
 }
 
 for (let i = 0; i < 1; i++) {
   makeRequests();
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~ After makeRequests");
 }
+
+console.log("~~~~~~~~~~~~~~~~~~~~~~~ After makeRequests loop");
 
 process.on('exit', function (){
   console.log('Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~Goodbye~!');
