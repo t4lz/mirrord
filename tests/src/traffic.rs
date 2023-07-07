@@ -77,6 +77,8 @@ mod traffic {
         let mut process =
             run_exec_with_target(node_command, &service.target, None, None, None).await;
 
+        eprintln!("~~~~~~~~~~~~~   Waiting for test process to exit.  ~~~~~~~~~~~~~~");
+
         let res = process.child.wait().await.unwrap();
         assert!(res.success());
     }
