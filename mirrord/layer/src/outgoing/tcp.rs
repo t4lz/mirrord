@@ -23,7 +23,7 @@ use tokio::{
     task,
 };
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use super::*;
 use crate::{common::ResponseDeque, detour::DetourGuard, error::LayerError};
@@ -399,7 +399,7 @@ impl TcpOutgoingHandler {
                         sender.send(bytes).await.unwrap_or_else(|_| {
                             warn!(
                         "Got new data from agent after application closed socket. connection_id: \
-                    connection_id: {connection_id}"
+                        {connection_id}"
                     );
                         });
                     }

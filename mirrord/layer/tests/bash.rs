@@ -25,7 +25,7 @@ use tokio_stream::StreamExt;
 /// On MacOS, this works because the executable is patched before running, and the calls to
 /// `execve` for `bash` and `cat` are hooked, and the binaries are patched.
 #[rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test]
 #[timeout(Duration::from_secs(60))]
 async fn bash_script(dylib_path: &Path) {
     let application = Application::EnvBashCat;
@@ -48,6 +48,12 @@ async fn bash_script(dylib_path: &Path) {
     let fd: u64 = 1;
 
     bash_layer_connection.expect_gethostname(fd).await;
+
+    // After the process forks we create a new main loop layer task in the child process.
+    // That connection will die as soon as the new process calls execve, then a new layer will be
+    // initialized.
+    let mut _layer_after_fork_before_exec =
+        LayerConnection::get_initialized_connection(&listener).await;
 
     let mut cat_layer_connection = LayerConnection::get_initialized_connection(&listener).await;
     // TODO: theoretically the connections arrival order could be different, should we handle it?
@@ -90,6 +96,6 @@ async fn bash_script(dylib_path: &Path) {
     // and that's okay - it's either file closing then process terminates or process terminates.
     // which closes the whole session in the agent
 
-    test_process.assert_no_error_in_stdout();
-    test_process.assert_no_error_in_stderr();
+    test_process.assert_no_error_in_stdout().await;
+    test_process.assert_no_error_in_stderr().await;
 }

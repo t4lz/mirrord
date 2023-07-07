@@ -68,7 +68,8 @@ unsafe fn open_logic(raw_path: *const c_char, open_flags: c_int, mode: c_int) ->
 
 /// Hook for `libc::open`.
 ///
-/// **Bypassed** by `raw_path`s that match `IGNORE_FILES` regex.
+/// **Bypassed** by `raw_path`s that match what's in the `generate_local_set` regex, see
+/// [`super::filter`].
 #[hook_fn]
 pub(super) unsafe extern "C" fn open_detour(
     raw_path: *const c_char,
@@ -89,10 +90,8 @@ pub(super) unsafe extern "C" fn open_detour(
 }
 
 /// Hook for `libc::open$NOCANCEL`.
-///
-/// **Bypassed** by `raw_path`s that match `IGNORE_FILES` regex.
 #[hook_fn]
-pub(super) unsafe extern "C" fn _open_nocancel_detour(
+pub(super) unsafe extern "C" fn open_nocancel_detour(
     raw_path: *const c_char,
     open_flags: c_int,
     mut args: ...
@@ -100,12 +99,12 @@ pub(super) unsafe extern "C" fn _open_nocancel_detour(
     let mode: c_int = args.arg();
     let guard = DetourGuard::new();
     if guard.is_none() {
-        FN__OPEN_NOCANCEL(raw_path, open_flags, mode)
+        FN_OPEN_NOCANCEL(raw_path, open_flags, mode)
     } else {
         open_logic(raw_path, open_flags, mode).unwrap_or_bypass_with(|_bypass| {
             #[cfg(target_os = "macos")]
             let raw_path = update_ptr_from_bypass(raw_path, _bypass);
-            FN__OPEN_NOCANCEL(raw_path, open_flags, mode)
+            FN_OPEN_NOCANCEL(raw_path, open_flags, mode)
         })
     }
 }
@@ -748,10 +747,10 @@ pub(crate) unsafe fn enable_file_hooks(hook_manager: &mut HookManager) {
     replace!(hook_manager, "open", open_detour, FnOpen, FN_OPEN);
     replace!(
         hook_manager,
-        "_openat$NOCANCEL",
-        _open_nocancel_detour,
-        Fn_open_nocancel,
-        FN__OPEN_NOCANCEL
+        "open$NOCANCEL",
+        open_nocancel_detour,
+        FnOpen_nocancel,
+        FN_OPEN_NOCANCEL
     );
 
     replace!(hook_manager, "openat", openat_detour, FnOpenat, FN_OPENAT);

@@ -53,6 +53,27 @@ pub(crate) enum CliError {
     {GENERAL_HELP}"#
     ))]
     OperatorConnectionFailed(#[from] OperatorApiError),
+    #[error("Failed to connect to the operator. Someone else is stealing traffic from the requested target")]
+    #[diagnostic(help(
+        r#"
+    If you want to run anyway please set the following:
+    
+    {{
+      "feature": {{
+        "network": {{
+          "incoming": {{
+            ...
+            "on_concurrent_steal": "continue" // or "override"
+          }}
+        }}
+      }}
+    }}
+
+    More info (https://mirrord.dev/docs/overview/configuration/#feature-network-incoming-on_concurrent_steal)
+
+    {GENERAL_HELP}"#
+    ))]
+    OperatorConcurrentSteal,
     #[error("Failed to create Kubernetes API. {0:#?}")]
     #[diagnostic(help(
         r#"
@@ -145,18 +166,11 @@ pub(crate) enum CliError {
         "Please check that the path is correct and that you have permissions to read it.{GENERAL_HELP}",
     ))]
     ConfigFilePathError(PathBuf, std::io::Error),
-    #[error("License Error: `{0:#?}`")]
-    #[diagnostic(help(
-        r#"Check if license is valid and make sure you have working network connection{GENERAL_HELP}"#
-    ))]
-    LicenseError(reqwest::Error),
     #[error("Creating kubernetes manifest yaml file failed with err : {0:#?}")]
     #[diagnostic(help(
         r#"Check if you have permissions to write to the file and/or directory exists{GENERAL_HELP}"#
     ))]
     ManifestFileError(std::io::Error),
-    #[error("Authentication issue: `{0:#?}`")]
-    AuthError(#[from] mirrord_auth::AuthenticationError),
     #[cfg(target_os = "macos")]
     #[error("SIP Error: `{0:#?}`")]
     #[diagnostic(help(
@@ -198,15 +212,4 @@ pub(crate) enum CliError {
     #[error("Waitlist registration failed.")]
     #[diagnostic(help("Please check the email provided and internet connection.{GENERAL_HELP}"))]
     WaitlistError(reqwest::Error),
-    #[error("{0} is not compatible with a targetless agent, please either disable this option or specify a target.")]
-    IncompatibleWithTargetless(String),
-    #[error(
-        "A target namespace was specified, but no target was specified. If you want to set the \
-        namespace in which the agent will be created, please set the agent namespace, not the \
-        target namespace. That value can be set with agent.namespace in the configuration file, \
-        the -a argument of the CLI, or the MIRRORD_AGENT_NAMESPACE environment variable.
-
-        If you are not trying to run targetless, please specify a target instead."
-    )]
-    TargetNamespaceWithoutTarget,
 }

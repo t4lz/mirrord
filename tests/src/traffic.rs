@@ -328,6 +328,7 @@ mod traffic {
 
     #[rstest]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[timeout(Duration::from_secs(120))]
     pub async fn gethostname_remote_result(#[future] hostname_service: KubeService) {
         let service = hostname_service.await;
         let node_command = vec!["python3", "-u", "python-e2e/hostname.py"];
@@ -397,23 +398,6 @@ mod traffic {
 
         // The test application panics if it does not successfully connect to the socket, send data,
         // and get the same data back. So if it exits with success everything worked.
-        assert!(res.success());
-    }
-
-    /// Test the dns query is sent and data is received properly.
-    /// node, with c-ares dependency expects the address to be the same as the one data was sent to
-    #[rstest]
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[timeout(Duration::from_secs(50))]
-    pub async fn outgoing_udp_with_original_address(#[future] service: KubeService) {
-        let service = service.await;
-        let node_command = vec![
-            "node",
-            "node-e2e/outgoing/test_outgoing_traffic_original_address.mjs",
-        ];
-        let mut process =
-            run_exec_with_target(node_command, &service.target, None, None, None).await;
-        let res = process.child.wait().await.unwrap();
         assert!(res.success());
     }
 }

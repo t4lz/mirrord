@@ -28,9 +28,9 @@ It comes as a Visual Studio Code extension, an IntelliJ plugin and a CLI tool. Y
     - [Installation](#installation-2)
     - [How To Use](#how-to-use-2)
   - [How It Works](#how-it-works)
+    - [Additional capabilities](#additional-capabilities)
   - [FAQ](#faq)
   - [Contributing](#contributing)
-  - [Development](#development)
   - [Help and Community](#help-and-community)
   - [Code of Conduct](#code-of-conduct)
   - [License](#license)
@@ -119,10 +119,18 @@ mirrord exec node app.js --target pod/my-pod
 
 ## How It Works
 
-When you select a pod to impersonate, mirrord launches a privileged pod on the same node as the pod you selected.
+When you select a pod to impersonate, mirrord launches a pod on the same node as the pod you selected.
 The new pod is then used to connect your local process and the impersonated pod: it mirrors incoming traffic from the pod to your process,
 routes outgoing traffic from your process through the pod, and does the same for file reads, file writes, and environment variables.
 You can read more about it [here](https://mirrord.dev/docs/overview/introduction/).
+
+### Additional capabilities
+
+Container run inside the pod launched by mirrord requires additional [Linux capabilities](https://man7.org/linux/man-pages/man7/capabilities.7.html):
+
+- `CAP_NET_ADMIN` - for modifying routing tables
+- `CAP_SYS_PTRACE` - for reading target pod environment
+- `CAP_SYS_ADMIN` - for joining target pod network namespace
 
 <p align="center">
   <img src="./images/how_it_works.svg" alt="How It Works"/>
@@ -136,13 +144,8 @@ or on [Discord](https://discord.gg/metalbear).
 
 ## Contributing
 
-Contributions are much welcome. Start by checking out [issues](https://github.com/metalbear-co/mirrord/issues).
-If you wish to work an issue, please comment so you can be assigned.
-
-## Development
-
-- Read the [testing guide](TESTING.md) that explains how to run the tests locally.
-- Read the [debugging guide](DEBUGGING.md) for tips on how to debug different components of mirrord.
+Contributions are very welcome. Start by checking out our [open issues](https://github.com/metalbear-co/mirrord/issues), and by going through our [contributing guide](CONTRIBUTING.md).
+We're available on [Discord](https://discord.gg/metalbear) for any questions.
 
 ## Help and Community
 

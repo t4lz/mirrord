@@ -1,9 +1,8 @@
+use chrono::NaiveDate;
 use kube::CustomResource;
 use mirrord_config::target::{Target, TargetConfig};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
-use crate::license::License;
 
 pub const TARGETLESS_TARGET_NAME: &str = "targetless";
 
@@ -18,6 +17,7 @@ pub const TARGETLESS_TARGET_NAME: &str = "targetless";
 pub struct TargetSpec {
     /// None when targetless.
     pub target: Option<Target>,
+    pub port_locks: Option<Vec<TargetPortLock>>,
 }
 
 impl TargetCrd {
@@ -25,6 +25,7 @@ impl TargetCrd {
         match target {
             Target::Deployment(target) => format!("deploy.{}", target.deployment),
             Target::Pod(target) => format!("pod.{}", target.pod),
+            Target::Rollout(target) => format!("rollout.{}", target.rollout),
         }
     }
 
@@ -55,6 +56,12 @@ impl From<TargetCrd> for TargetConfig {
     }
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+pub struct TargetPortLock {
+    pub target_hash: String,
+    pub port: u16,
+}
+
 pub static OPERATOR_STATUS_NAME: &str = "operator";
 
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
@@ -68,12 +75,19 @@ pub static OPERATOR_STATUS_NAME: &str = "operator";
 pub struct MirrordOperatorSpec {
     pub operator_version: String,
     pub default_namespace: String,
-    pub license: License,
+    pub license: LicenseInfoOwned,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 pub struct MirrordOperatorStatus {
     pub sessions: Vec<Session>,
+    pub statistics: Option<MirrordOperatorStatusStatistics>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+pub struct MirrordOperatorStatusStatistics {
+    pub dau: usize,
+    pub mau: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
@@ -82,4 +96,12 @@ pub struct Session {
     pub duration_secs: u64,
     pub user: String,
     pub target: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct LicenseInfoOwned {
+    pub name: String,
+    pub organization: String,
+    pub expire_at: NaiveDate,
+    pub fingerprint: Option<String>,
 }

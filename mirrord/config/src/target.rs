@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use mirrord_analytics::CollectAnalytics;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -12,19 +13,6 @@ use crate::{
     util::string_or_struct_option,
 };
 
-/// Specifies the target to mirror. See [`Target`].
-///
-/// ## Examples
-///
-/// - Mirror pod `hello-world-abcd-1234` in the `hello` namespace:
-///
-/// ```toml
-/// # mirrord-config.toml
-///
-/// [target]
-/// path = "pod/hello-world-abcd-1234"
-/// namespace = "hello"
-/// ```
 #[derive(Deserialize, PartialEq, Eq, Clone, Debug, JsonSchema)]
 #[serde(untagged, rename_all = "lowercase")]
 pub enum TargetFileConfig {
@@ -32,9 +20,10 @@ pub enum TargetFileConfig {
     // we need default else target value will be required in some scenarios.
     Simple(#[serde(default, deserialize_with = "string_or_struct_option")] Option<Target>),
     Advanced {
-        // Path is optional so that it can also be specified via env var instead of via conf file,
-        // but it is not optional in a resulting [`TargetConfig`] object - either there is a path,
-        // or the target configuration is `None`.
+        /// <!--${internal}-->
+        /// Path is optional so that it can also be specified via env var instead of via conf file,
+        /// but it is not optional in a resulting [`TargetConfig`] object - either there is a path,
+        /// or the target configuration is `None`.
         #[serde(default, deserialize_with = "string_or_struct_option")]
         path: Option<Target>,
         namespace: Option<String>,
@@ -47,10 +36,55 @@ pub enum TargetFileConfig {
 //   an error. The error is not returned when parsing the configuration because it's not an error
 //   for `mirrord ls`.
 // - Both are `None` -> targetless.
+/// Specifies the target and namespace to mirror, see [`path`](#target-path) for a list of
+/// accepted values for the `target` option.
+///
+/// The simplified configuration supports:
+///
+/// - `pod/{sample-pod}/[container]/{sample-container}`;
+/// - `podname/{sample-pod}/[container]/{sample-container}`;
+/// - `deployment/{sample-deployment}/[container]/{sample-container}`;
+///
+/// Shortened setup:
+///
+///```json
+/// {
+///  "target": "pod/bear-pod"
+/// }
+/// ```
+///
+/// Complete setup:
+///
+/// ```json
+/// {
+///  "target": {
+///    "path": {
+///      "pod": "bear-pod"
+///    },
+///    "namespace": "default"
+///  }
+/// }
+/// ```
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TargetConfig {
+    /// ### target.path {#target-path}
+    ///
+    /// Specifies the running pod (or deployment) to mirror.
+    ///
+    /// Supports:
+    /// - `pod/{sample-pod}`;
+    /// - `podname/{sample-pod}`;
+    /// - `deployment/{sample-deployment}`;
+    /// - `container/{sample-container}`;
+    /// - `containername/{sample-container}`.
     pub path: Option<Target>,
+
+    /// ### target.namespace {#target-namespace}
+    ///
+    /// Namespace where the target lives.
+    ///
+    /// Defaults to `"default"`.
     pub namespace: Option<String>,
 }
 
@@ -122,6 +156,9 @@ mirrord-layer failed to parse the provided target!
     >> check if the provided target is in the correct namespace.
 "#;
 
+/// <!--${internal}-->
+/// ## path
+///
 /// Specifies the running pod (or deployment) to mirror.
 ///
 /// Supports:
@@ -130,23 +167,20 @@ mirrord-layer failed to parse the provided target!
 /// - `deployment/{sample-deployment}`;
 /// - `container/{sample-container}`;
 /// - `containername/{sample-container}`.
-///
-/// ## Examples
-///
-/// - Mirror pod `hello-world-abcd-1234`:
-///
-/// ```toml
-/// # mirrord-config.toml
-///
-/// target = "pod/hello-world-abcd-1234"
-/// ```
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, JsonSchema)]
 #[serde(untagged)]
 pub enum Target {
+    /// <!--${internal}-->
     /// Mirror a deployment.
     Deployment(DeploymentTarget),
+
+    /// <!--${internal}-->
     /// Mirror a pod.
     Pod(PodTarget),
+
+    /// <!--${internal}-->
+    /// Mirror a rollout.
+    Rollout(RolloutTarget),
 }
 
 impl FromStr for Target {
@@ -158,17 +192,20 @@ impl FromStr for Target {
             Some("deployment") | Some("deploy") => {
                 DeploymentTarget::from_split(&mut split).map(Target::Deployment)
             }
+            Some("rollout") => RolloutTarget::from_split(&mut split).map(Target::Rollout),
             Some("pod") => PodTarget::from_split(&mut split).map(Target::Pod),
             _ => Err(ConfigError::InvalidTarget(format!(
-                "Provided target: {target} is neither a pod or a deployment. Did you mean pod/{target} or deployment/{target}\n{FAIL_PARSE_DEPLOYMENT_OR_POD}",
+                "Provided target: {target} is unsupported. Did you remember to add a prefix, e.g. pod/{target}? \n{FAIL_PARSE_DEPLOYMENT_OR_POD}",
             ))),
         }
     }
 }
 
+/// <!--${internal}-->
 /// Mirror the pod specified by [`PodTarget::pod`].
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, JsonSchema)]
 pub struct PodTarget {
+    /// <!--${internal}-->
     /// Pod to mirror.
     pub pod: String,
     pub container: Option<String>,
@@ -195,9 +232,11 @@ impl FromSplit for PodTarget {
     }
 }
 
+/// <!--${internal}-->
 /// Mirror the deployment specified by [`DeploymentTarget::deployment`].
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, JsonSchema)]
 pub struct DeploymentTarget {
+    /// <!--${internal}-->
     /// Deployment to mirror.
     pub deployment: String,
     pub container: Option<String>,
@@ -221,6 +260,81 @@ impl FromSplit for DeploymentTarget {
                 FAIL_PARSE_DEPLOYMENT_OR_POD.to_string(),
             )),
         }
+    }
+}
+
+/// <!--${internal}-->
+/// Mirror the rollout specified by [`RolloutTarget::rollout`].
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, JsonSchema)]
+pub struct RolloutTarget {
+    /// <!--${internal}-->
+    /// Rollout to mirror.
+    pub rollout: String,
+    pub container: Option<String>,
+}
+
+impl FromSplit for RolloutTarget {
+    fn from_split(split: &mut std::str::Split<char>) -> Result<Self> {
+        let rollout = split
+            .next()
+            .ok_or_else(|| ConfigError::InvalidTarget(FAIL_PARSE_DEPLOYMENT_OR_POD.to_string()))?;
+        match (split.next(), split.next()) {
+            (Some("container"), Some(container)) => Ok(Self {
+                rollout: rollout.to_string(),
+                container: Some(container.to_string()),
+            }),
+            (None, None) => Ok(Self {
+                rollout: rollout.to_string(),
+                container: None,
+            }),
+            _ => Err(ConfigError::InvalidTarget(
+                FAIL_PARSE_DEPLOYMENT_OR_POD.to_string(),
+            )),
+        }
+    }
+}
+
+bitflags::bitflags! {
+    #[repr(C)]
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct TargetAnalyticFlags: u32 {
+        const NAMESPACE = 1;
+        const POD = 2;
+        const DEPLOYMENT = 4;
+        const CONTAINER = 8;
+        const ROLLOUT = 16;
+    }
+}
+
+impl CollectAnalytics for &TargetConfig {
+    fn collect_analytics(&self, analytics: &mut mirrord_analytics::Analytics) {
+        let mut flags = TargetAnalyticFlags::empty();
+        if self.namespace.is_some() {
+            flags |= TargetAnalyticFlags::NAMESPACE;
+        }
+        if let Some(path) = &self.path {
+            match path {
+                Target::Pod(pod) => {
+                    flags |= TargetAnalyticFlags::POD;
+                    if pod.container.is_some() {
+                        flags |= TargetAnalyticFlags::CONTAINER;
+                    }
+                }
+                Target::Deployment(deployment) => {
+                    flags |= TargetAnalyticFlags::DEPLOYMENT;
+                    if deployment.container.is_some() {
+                        flags |= TargetAnalyticFlags::CONTAINER;
+                    }
+                }
+                Target::Rollout(rollout) => {
+                    flags |= TargetAnalyticFlags::ROLLOUT;
+                    if rollout.container.is_some() {
+                        flags |= TargetAnalyticFlags::CONTAINER;
+                    }
+                }
+            }
+        }
+        analytics.add("target_mode", flags.bits())
     }
 }
 
@@ -273,6 +387,17 @@ mod tests {
             namespace: Some("baz".to_string())
         }
     )] // Pod and namespace specified.
+    #[case(
+        Some("rollout/foo"),
+        None,
+        TargetConfig{
+            path: Some(Target::Rollout(RolloutTarget {
+                rollout: "foo".to_string(),
+                container: None
+            })),
+            namespace: None
+        }
+    )] // Rollout specified.
     fn default(
         #[case] path_env: Option<&str>,
         #[case] namespace_env: Option<&str>,

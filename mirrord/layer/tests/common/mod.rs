@@ -1,15 +1,10 @@
 use std::{
-    assert_matches::assert_matches,
-    cmp::min,
-    collections::HashMap,
-    fmt::Debug,
-    path::PathBuf,
-    process::Stdio,
-    sync::{Arc, Mutex},
+    assert_matches::assert_matches, cmp::min, collections::HashMap, fmt::Debug, path::PathBuf,
+    process::Stdio, sync::Arc,
 };
 
 use actix_codec::Framed;
-use chrono::Utc;
+use chrono::{Timelike, Utc};
 use fancy_regex::Regex;
 use futures::{SinkExt, StreamExt};
 use mirrord_protocol::{
@@ -20,17 +15,26 @@ use mirrord_protocol::{
     tcp::{DaemonTcp, LayerTcp, NewTcpConnection, TcpClose, TcpData},
     ClientMessage, DaemonCodec, DaemonMessage, FileRequest, FileResponse,
 };
+#[cfg(target_os = "macos")]
+use mirrord_sip::sip_patch;
 use rstest::fixture;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
     process::{Child, Command},
+    sync::Mutex,
 };
 
 /// Configuration for [`Application::RustOutgoingTcp`] and [`Application::RustOutgoingUdp`].
 pub const RUST_OUTGOING_PEERS: &str = "1.1.1.1:1111,2.2.2.2:2222,3.3.3.3:3333";
 /// Configuration for [`Application::RustOutgoingTcp`] and [`Application::RustOutgoingUdp`].
 pub const RUST_OUTGOING_LOCAL: &str = "4.4.4.4:4444";
+
+/// Returns string with time format of hh:mm:ss
+fn format_time() -> String {
+    let now = Utc::now();
+    format!("{:02}:{:02}:{:02}", now.hour(), now.minute(), now.second())
+}
 
 pub struct TestProcess {
     pub child: Option<Child>,
@@ -40,23 +44,23 @@ pub struct TestProcess {
 }
 
 impl TestProcess {
-    pub fn get_stdout(&self) -> String {
-        self.stdout.lock().unwrap().clone()
+    pub async fn get_stdout(&self) -> String {
+        self.stdout.lock().await.clone()
     }
 
-    pub fn get_stderr(&self) -> String {
-        self.stderr.lock().unwrap().clone()
+    pub async fn get_stderr(&self) -> String {
+        self.stderr.lock().await.clone()
     }
 
-    pub fn assert_log_level(&self, stderr: bool, level: &str) {
+    pub async fn assert_log_level(&self, stderr: bool, level: &str) {
         if stderr {
-            assert!(!self.stderr.lock().unwrap().contains(level));
+            assert!(!self.stderr.lock().await.contains(level));
         } else {
-            assert!(!self.stdout.lock().unwrap().contains(level));
+            assert!(!self.stdout.lock().await.contains(level));
         }
     }
 
-    fn from_child(mut child: Child) -> TestProcess {
+    async fn from_child(mut child: Child) -> TestProcess {
         let stderr_data = Arc::new(Mutex::new(String::new()));
         let stdout_data = Arc::new(Mutex::new(String::new()));
         let child_stderr = child.stderr.take().unwrap();
@@ -73,11 +77,10 @@ impl TestProcess {
                 if n == 0 {
                     break;
                 }
-
                 let string = String::from_utf8_lossy(&buf[..n]);
-                eprintln!("stderr {:?} {pid}: {}", Utc::now(), string);
+                eprintln!("stderr {} {pid}: {}", format_time(), string);
                 {
-                    stderr_data_reader.lock().unwrap().push_str(&string);
+                    stderr_data_reader.lock().await.push_str(&string);
                 }
             }
         });
@@ -90,9 +93,9 @@ impl TestProcess {
                     break;
                 }
                 let string = String::from_utf8_lossy(&buf[..n]);
-                print!("stdout {:?} {pid}: {}", Utc::now(), string);
+                print!("stdout {} {pid}: {}", format_time(), string);
                 {
-                    stdout_data_reader.lock().unwrap().push_str(&string);
+                    stdout_data_reader.lock().await.push_str(&string);
                 }
             }
         });
@@ -120,28 +123,28 @@ impl TestProcess {
             .spawn()
             .unwrap();
         println!("Started application.");
-        TestProcess::from_child(child)
+        TestProcess::from_child(child).await
     }
 
-    pub fn assert_stdout_contains(&self, string: &str) {
-        assert!(self.stdout.lock().unwrap().contains(string));
+    pub async fn assert_stdout_contains(&self, string: &str) {
+        assert!(self.stdout.lock().await.contains(string));
     }
 
-    pub fn assert_stderr_contains(&self, string: &str) {
-        assert!(self.stderr.lock().unwrap().contains(string));
+    pub async fn assert_stderr_contains(&self, string: &str) {
+        assert!(self.stderr.lock().await.contains(string));
     }
 
-    pub fn assert_no_error_in_stdout(&self) {
+    pub async fn assert_no_error_in_stdout(&self) {
         assert!(!self
             .error_capture
-            .is_match(&self.stdout.lock().unwrap())
+            .is_match(&self.stdout.lock().await)
             .unwrap());
     }
 
-    pub fn assert_no_error_in_stderr(&self) {
+    pub async fn assert_no_error_in_stderr(&self) {
         assert!(!self
             .error_capture
-            .is_match(&self.stderr.lock().unwrap())
+            .is_match(&self.stderr.lock().await)
             .unwrap());
     }
 
@@ -331,7 +334,12 @@ impl LayerConnection {
     }
 
     pub async fn is_ended(&mut self) -> bool {
-        self.codec.next().await.is_none()
+        if let Some(msg) = self.codec.next().await {
+            println!("Got unexpected message: {msg:?}");
+            false
+        } else {
+            true
+        }
     }
 
     /// Send the layer a message telling it the target got a new incoming connection.
@@ -715,8 +723,10 @@ pub enum Application {
     RustFileOps,
     Go19FileOps,
     Go20FileOps,
+    JavaTemurinSip,
     EnvBashCat,
     NodeFileOps,
+    NodeSpawn,
     Go19Dir,
     Go20Dir,
     Go19DirBypass,
@@ -724,7 +734,6 @@ pub enum Application {
     Go20Issue834,
     Go19Issue834,
     Go18Issue834,
-    NodeSpawn,
     BashShebang,
     Go18Read,
     Go19Read,
@@ -743,6 +752,12 @@ pub enum Application {
     RustOutgoingTcp,
     RustIssue1123,
     RustIssue1054,
+    RustIssue1458,
+    RustIssue1458PortNot53,
+    RustDnsResolve,
+    RustRecvFrom,
+    RustListenPorts,
+    Fork,
     // For running applications with the executable and arguments determined at runtime.
     // Compiled only on macos just because it's currently only used there, but could be used also
     // on Linux.
@@ -778,7 +793,12 @@ impl Application {
             | Application::PythonDontLoad
             | Application::PythonListen => Self::get_python3_executable().await,
             Application::PythonFastApiHTTP => String::from("uvicorn"),
+            Application::Fork => String::from("tests/apps/fork/out.c_test_app"),
             Application::NodeHTTP => String::from("node"),
+            Application::JavaTemurinSip => format!(
+                "{}/.sdkman/candidates/java/17.0.6-tem/bin/java",
+                std::env::var("HOME").unwrap(),
+            ),
             Application::Go19HTTP => String::from("tests/apps/app_go/19.go_test_app"),
             Application::Go20HTTP => String::from("tests/apps/app_go/20.go_test_app"),
             Application::Go19FileOps => String::from("tests/apps/fileops/go/19.go_test_app"),
@@ -791,7 +811,7 @@ impl Application {
                 )
             }
             Application::EnvBashCat => String::from("tests/apps/env_bash_cat.sh"),
-            Application::NodeFileOps => String::from("node"),
+            Application::NodeFileOps | Application::NodeSpawn => String::from("node"),
             Application::Go19Dir => String::from("tests/apps/dir_go/19.go_test_app"),
             Application::Go20Dir => String::from("tests/apps/dir_go/20.go_test_app"),
             Application::Go20Issue834 => String::from("tests/apps/issue834/20.go_test_app"),
@@ -799,7 +819,6 @@ impl Application {
             Application::Go18Issue834 => String::from("tests/apps/issue834/18.go_test_app"),
             Application::Go19DirBypass => String::from("tests/apps/dir_go_bypass/19.go_test_app"),
             Application::Go20DirBypass => String::from("tests/apps/dir_go_bypass/20.go_test_app"),
-            Application::NodeSpawn => String::from("node"),
             Application::BashShebang => String::from("tests/apps/nothing.sh"),
             Application::Go18Read => String::from("tests/apps/read_go/18.go_test_app"),
             Application::Go19Read => String::from("tests/apps/read_go/19.go_test_app"),
@@ -816,11 +835,34 @@ impl Application {
             Application::Go19SelfOpen => String::from("tests/apps/self_open/19.go_test_app"),
             Application::RustIssue1123 => String::from("tests/apps/issue1123/target/issue1123"),
             Application::RustIssue1054 => String::from("tests/apps/issue1054/target/issue1054"),
+            Application::RustIssue1458 => String::from("tests/apps/issue1458/target/issue1458"),
+            Application::RustIssue1458PortNot53 => {
+                String::from("tests/apps/issue1458portnot53/target/issue1458portnot53")
+            }
             Application::RustOutgoingUdp | Application::RustOutgoingTcp => format!(
                 "{}/{}",
                 env!("CARGO_MANIFEST_DIR"),
                 "../../target/debug/outgoing",
             ),
+            Application::RustDnsResolve => format!(
+                "{}/{}",
+                env!("CARGO_MANIFEST_DIR"),
+                "../../target/debug/dns_resolve",
+            ),
+            Application::RustRecvFrom => {
+                format!(
+                    "{}/{}",
+                    env!("CARGO_MANIFEST_DIR"),
+                    "../../target/debug/recv_from"
+                )
+            }
+            Application::RustListenPorts => {
+                format!(
+                    "{}/{}",
+                    env!("CARGO_MANIFEST_DIR"),
+                    "../../target/debug/listen_ports"
+                )
+            }
             #[cfg(target_os = "macos")]
             Application::DynamicApp(exe, _args) => exe.clone(),
         }
@@ -830,6 +872,10 @@ impl Application {
         let mut app_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         app_path.push("tests/apps/");
         match self {
+            Application::JavaTemurinSip => {
+                app_path.push("java_temurin_sip/src/Main.java");
+                vec![app_path.to_string_lossy().to_string()]
+            }
             Application::PythonFlaskHTTP => {
                 app_path.push("app_flask.py");
                 println!("using flask server from {app_path:?}");
@@ -888,9 +934,15 @@ impl Application {
             | Application::Go20FAccessAt
             | Application::Go19FAccessAt
             | Application::Go18FAccessAt
+            | Application::Fork
             | Application::RustFileOps
             | Application::RustIssue1123
             | Application::RustIssue1054
+            | Application::RustIssue1458
+            | Application::RustIssue1458PortNot53
+            | Application::RustDnsResolve
+            | Application::RustRecvFrom
+            | Application::RustListenPorts
             | Application::EnvBashCat
             | Application::BashShebang
             | Application::Go19SelfOpen
@@ -923,10 +975,13 @@ impl Application {
             Application::PythonListen => 21232,
             Application::PythonDontLoad
             | Application::RustFileOps
+            | Application::RustDnsResolve
+            | Application::JavaTemurinSip
             | Application::EnvBashCat
             | Application::NodeFileOps
             | Application::NodeSpawn
             | Application::BashShebang
+            | Application::Fork
             | Application::Go20Issue834
             | Application::Go19Issue834
             | Application::Go18Issue834
@@ -948,7 +1003,11 @@ impl Application {
             | Application::Go19Dir
             | Application::Go20Dir
             | Application::RustOutgoingUdp
-            | Application::RustOutgoingTcp => unimplemented!("shouldn't get here"),
+            | Application::RustOutgoingTcp
+            | Application::RustIssue1458
+            | Application::RustIssue1458PortNot53
+            | Application::RustListenPorts
+            | Application::RustRecvFrom => unimplemented!("shouldn't get here"),
             #[cfg(target_os = "macos")]
             Application::DynamicApp(_, _) => unimplemented!("shouldn't get here"),
             Application::PythonSelfConnect => 1337,
@@ -956,10 +1015,14 @@ impl Application {
     }
 
     /// Start the test process with the given env.
-    async fn get_test_process(&self, env: HashMap<&str, &str>) -> TestProcess {
+    pub async fn get_test_process(&self, env: HashMap<&str, &str>) -> TestProcess {
         let executable = self.get_executable().await;
+        #[cfg(target_os = "macos")]
+        let executable = sip_patch(&executable, &Vec::new())
+            .unwrap()
+            .unwrap_or(executable);
         println!("Using executable: {}", &executable);
-
+        println!("Using args: {:?}", self.get_args());
         TestProcess::start_process(executable, self.get_args(), env).await
     }
 

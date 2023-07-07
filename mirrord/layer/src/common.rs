@@ -4,7 +4,7 @@ use std::{collections::VecDeque, ffi::CStr, path::PathBuf};
 use libc::c_char;
 use mirrord_protocol::{file::OpenOptionsInternal, RemoteResult};
 #[cfg(target_os = "macos")]
-use mirrord_sip::{CURRENT_EXE, MIRRORD_TEMP_BIN_DIR};
+use mirrord_sip::{MIRRORD_TEMP_BIN_DIR_CANONIC_STRING, MIRRORD_TEMP_BIN_DIR_STRING};
 use tokio::sync::oneshot;
 use tracing::warn;
 
@@ -58,8 +58,11 @@ pub(crate) type ResponseChannel<T> = oneshot::Sender<RemoteResult<T>>;
 pub(crate) fn blocking_send_hook_message(message: HookMessage) -> HookResult<()> {
     HOOK_SENDER
         .get()
-        .ok_or(HookError::EmptyHookSender)
-        .and_then(|hook_sender| hook_sender.blocking_send(message).map_err(Into::into))
+        .ok_or(HookError::CannotGetHookSender)?
+        .read()
+        .map_err(|_| HookError::CannotGetHookSender)?
+        .blocking_send(message)
+        .map_err(Into::into)
 }
 
 /// These messages are handled internally by the layer, and become `ClientMessage`s sent to
@@ -122,17 +125,6 @@ impl CheckedInto<String> for *const c_char {
     }
 }
 
-/// For a given str, return whether it's the path of the current running executable.
-///
-/// Also returns false if determining the current executable failed, or if its path is non-unicode.
-#[cfg(target_os = "macos")]
-fn is_current_exe(path: &str) -> bool {
-    CURRENT_EXE
-        .as_deref()
-        .map(|exe_string| exe_string == path)
-        .unwrap_or_default()
-}
-
 impl CheckedInto<PathBuf> for *const c_char {
     /// Do the checked conversion to str, bypass if the str starts with temp dir's path, construct
     /// a `PathBuf` out of the str.
@@ -140,8 +132,10 @@ impl CheckedInto<PathBuf> for *const c_char {
         let str_det = CheckedInto::<&str>::checked_into(self);
         #[cfg(target_os = "macos")]
         let str_det = str_det.and_then(|path_str| {
-            if let Some(stripped_path) = path_str.strip_prefix(MIRRORD_TEMP_BIN_DIR.as_str())
-                && !is_current_exe(path_str) {
+            let optional_stripped_path = path_str
+                .strip_prefix(MIRRORD_TEMP_BIN_DIR_STRING.as_str())
+                .or_else(|| path_str.strip_prefix(MIRRORD_TEMP_BIN_DIR_CANONIC_STRING.as_str()));
+            if let Some(stripped_path) = optional_stripped_path {
                 // actually stripped, so bypass and provide a pointer to after the temp dir.
                 // `stripped_path` is a reference to a later character in the same string as
                 // `path_str`, `stripped_path.as_ptr()` returns a pointer to a later index

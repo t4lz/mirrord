@@ -12,16 +12,13 @@ mod traffic;
 #[cfg(test)]
 mod utils {
     use std::{
-        collections::HashMap,
-        fmt::Debug,
-        net::Ipv4Addr,
-        process::Stdio,
-        sync::{Arc, Condvar, Mutex},
+        collections::HashMap, fmt::Debug, net::Ipv4Addr, path::PathBuf, process::Stdio, sync::Arc,
         time::Duration,
     };
 
-    use chrono::Utc;
-    use futures_util::stream::TryStreamExt;
+    use chrono::{Timelike, Utc};
+    use futures::FutureExt;
+    use futures_util::{future::BoxFuture, stream::TryStreamExt};
     use k8s_openapi::api::{
         apps::v1::Deployment,
         core::v1::{Namespace, Pod, Service},
@@ -39,9 +36,9 @@ mod utils {
     use serde_json::json;
     use tempfile::{tempdir, TempDir};
     use tokio::{
-        io::{AsyncReadExt, BufReader},
+        io::{AsyncReadExt, AsyncWriteExt, BufReader},
         process::{Child, Command},
-        sync::oneshot::{self, Sender},
+        sync::Mutex,
     };
 
     const TEXT: &'static str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
@@ -86,6 +83,12 @@ mod utils {
             .to_ascii_lowercase()
     }
 
+    /// Returns string with time format of hh:mm:ss
+    fn format_time() -> String {
+        let now = Utc::now();
+        format!("{:02}:{:02}:{:02}", now.hour(), now.minute(), now.second())
+    }
+
     #[derive(Debug)]
     #[allow(dead_code)]
     pub enum Application {
@@ -97,6 +100,8 @@ mod utils {
         Go19HTTP,
         Go20HTTP,
         CurlToKubeApi,
+        PythonCloseSocket,
+        PythonCloseSocketKeepConnection,
     }
 
     #[derive(Debug)]
@@ -137,30 +142,35 @@ mod utils {
     }
 
     impl TestProcess {
-        pub fn get_stdout(&self) -> String {
-            self.stdout.lock().unwrap().clone()
+        pub async fn get_stdout(&self) -> String {
+            self.stdout.lock().await.clone()
         }
 
-        pub fn get_stderr(&self) -> String {
-            self.stderr.lock().unwrap().clone()
+        pub async fn get_stderr(&self) -> String {
+            self.stderr.lock().await.clone()
         }
 
-        pub fn assert_log_level(&self, stderr: bool, level: &str) {
+        pub async fn assert_log_level(&self, stderr: bool, level: &str) {
             if stderr {
-                assert!(!self.stderr.lock().unwrap().contains(level));
+                assert!(!self.stderr.lock().await.contains(level));
             } else {
-                assert!(!self.stdout.lock().unwrap().contains(level));
+                assert!(!self.stdout.lock().await.contains(level));
             }
         }
 
-        pub fn assert_python_fileops_stderr(&self) {
-            assert!(!self.stderr.lock().unwrap().contains("FAILED"));
+        pub async fn assert_python_fileops_stderr(&self) {
+            assert!(!self.stderr.lock().await.contains("FAILED"));
         }
 
-        pub fn wait_for_line(&self, timeout: Duration, line: &str) {
+        pub async fn wait_assert_success(self) {
+            let output = self.child.wait_with_output().await.unwrap();
+            assert!(output.status.success());
+        }
+
+        pub async fn wait_for_line(&self, timeout: Duration, line: &str) {
             let now = std::time::Instant::now();
             while now.elapsed() < timeout {
-                let stderr = self.get_stderr();
+                let stderr = self.get_stderr().await;
                 if stderr.contains(line) {
                     return;
                 }
@@ -168,7 +178,15 @@ mod utils {
             panic!("Timeout waiting for line: {line}");
         }
 
-        pub fn from_child(mut child: Child, tempdir: TempDir) -> TestProcess {
+        pub async fn write_to_stdin(&mut self, data: &[u8]) {
+            if let Some(ref mut stdin) = self.child.stdin {
+                stdin.write(data).await.unwrap();
+            } else {
+                panic!("Can't write to test app's stdin!");
+            }
+        }
+
+        pub async fn from_child(mut child: Child, tempdir: TempDir) -> TestProcess {
             let stderr_data = Arc::new(Mutex::new(String::new()));
             let stdout_data = Arc::new(Mutex::new(String::new()));
             let child_stderr = child.stderr.take().unwrap();
@@ -187,9 +205,9 @@ mod utils {
                     }
 
                     let string = String::from_utf8_lossy(&buf[..n]);
-                    eprintln!("stderr {:?} {pid}: {}", Utc::now(), string);
+                    eprintln!("stderr {} {pid}: {}", format_time(), string);
                     {
-                        stderr_data_reader.lock().unwrap().push_str(&string);
+                        stderr_data_reader.lock().await.push_str(&string);
                     }
                 }
             });
@@ -202,9 +220,9 @@ mod utils {
                         break;
                     }
                     let string = String::from_utf8_lossy(&buf[..n]);
-                    println!("stdout {:?} {pid}: {}", Utc::now(), string);
+                    print!("stdout {} {pid}: {}", format_time(), string);
                     {
-                        stdout_data_reader.lock().unwrap().push_str(&string);
+                        stdout_data_reader.lock().await.push_str(&string);
                     }
                 }
             });
@@ -230,6 +248,16 @@ mod utils {
                         "--host=0.0.0.0",
                         "--app-dir=./python-e2e/",
                         "app_fastapi:app",
+                    ]
+                }
+                Application::PythonCloseSocket => {
+                    vec!["python3", "-u", "python-e2e/close_socket.py"]
+                }
+                Application::PythonCloseSocketKeepConnection => {
+                    vec![
+                        "python3",
+                        "-u",
+                        "python-e2e/close_socket_keep_connection.py",
                     ]
                 }
                 Application::NodeHTTP => vec!["node", "node-e2e/app.js"],
@@ -264,13 +292,13 @@ mod utils {
             run_exec_with_target(self.get_cmd(), target, namespace, args, env).await
         }
 
-        pub fn assert(&self, process: &TestProcess) {
+        pub async fn assert(&self, process: &TestProcess) {
             match self {
                 Application::PythonFastApiHTTP => {
-                    process.assert_log_level(true, "ERROR");
-                    process.assert_log_level(false, "ERROR");
-                    process.assert_log_level(true, "CRITICAL");
-                    process.assert_log_level(false, "CRITICAL");
+                    process.assert_log_level(true, "ERROR").await;
+                    process.assert_log_level(false, "ERROR").await;
+                    process.assert_log_level(true, "CRITICAL").await;
+                    process.assert_log_level(false, "CRITICAL").await;
                 }
                 _ => {}
             }
@@ -302,9 +330,9 @@ mod utils {
         }
 
         #[cfg(target_os = "linux")]
-        pub fn assert(&self, process: TestProcess) {
+        pub async fn assert(&self, process: TestProcess) {
             match self {
-                FileOps::Python => process.assert_python_fileops_stderr(),
+                FileOps::Python => process.assert_python_fileops_stderr().await,
                 _ => {}
             }
         }
@@ -408,6 +436,7 @@ mod utils {
         let server = Command::new(path)
             .args(args.clone())
             .envs(base_env)
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -417,11 +446,11 @@ mod utils {
             server.id().unwrap()
         );
         // We need to hold temp dir until the process is finished
-        TestProcess::from_child(server, temp_dir)
+        TestProcess::from_child(server, temp_dir).await
     }
 
     /// Runs `mirrord ls` command and asserts if the json matches the expected format
-    pub fn run_ls(args: Option<Vec<&str>>, namespace: Option<&str>) -> TestProcess {
+    pub async fn run_ls(args: Option<Vec<&str>>, namespace: Option<&str>) -> TestProcess {
         let path = match option_env!("MIRRORD_TESTS_USE_BINARY") {
             None => env!("CARGO_BIN_FILE_MIRRORD"),
             Some(binary_path) => binary_path,
@@ -446,7 +475,7 @@ mod utils {
             "executed mirrord with args {mirrord_args:?} pid {}",
             process.id().unwrap()
         );
-        TestProcess::from_child(process, temp_dir)
+        TestProcess::from_child(process, temp_dir).await
     }
 
     #[fixture]
@@ -457,13 +486,13 @@ mod utils {
     }
 
     /// RAII-style guard for deleting kube resources after tests.
-    /// This guard spawns a background task to delete the kube resource.
+    /// This guard deletes the kube resource when dropped.
+    /// This guard can be configured not to delete the resource if dropped during a panic.
     struct ResourceGuard {
-        /// Used in the implementation of [`Drop`] for this struct to block until the background
-        /// task exits.
-        task_finished: Arc<(Mutex<bool>, Condvar)>,
-        /// Used to inform the background task whether this guard was dropped during panic.
-        panic_tx: Option<Sender<bool>>,
+        /// Whether the resource should be deleted if the test has panicked.
+        delete_on_fail: bool,
+        /// This future will delete the resource once awaited.
+        deleter: Option<BoxFuture<'static, ()>>,
     }
 
     impl ResourceGuard {
@@ -477,51 +506,49 @@ mod utils {
         ) -> Result<ResourceGuard, Error> {
             api.create(&PostParams::default(), data).await?;
 
-            let (panic_tx, panic_rx) = oneshot::channel::<bool>();
-            let task_finished = Arc::new((Mutex::new(false), Condvar::new()));
-            let finished = task_finished.clone();
-
-            tokio::spawn(async move {
-                let panic = panic_rx.await.unwrap_or(true);
-
-                if !panic || delete_on_fail {
-                    println!("Deleting resource `{name}`",);
-                    if let Err(e) = api.delete(&name, &DeleteParams::default()).await {
-                        println!("Failed to delete resource `{name}`: {e:?}");
-                    }
+            let deleter = async move {
+                println!("Deleting resource `{name}`");
+                let res = api.delete(&name, &DeleteParams::default()).await;
+                if let Err(e) = res {
+                    println!("Failed to delete resource `{name}`: {e:?}");
                 }
-
-                *finished.0.lock().expect("ResourceGuard lock poisoned") = true;
-                finished.1.notify_one();
-            });
+            };
 
             Ok(Self {
-                task_finished,
-                panic_tx: Some(panic_tx),
+                delete_on_fail,
+                deleter: Some(deleter.boxed()),
             })
+        }
+
+        /// If the underlying resource should be deleted (e.g. current thread is not panicking or
+        /// `delete_on_fail` was set), return the future to delete it. The future will
+        /// delete the resource once awaited.
+        ///
+        /// Used to run deleters from multiple [`ResourceGuard`]s on one runtime.
+        pub fn take_deleter(&mut self) -> Option<BoxFuture<'static, ()>> {
+            if !std::thread::panicking() || self.delete_on_fail {
+                self.deleter.take()
+            } else {
+                None
+            }
         }
     }
 
     impl Drop for ResourceGuard {
         fn drop(&mut self) {
-            let task_alive = self
-                .panic_tx
-                .take()
-                .expect("ResourceGuard holds empty panic_tx")
-                .send(std::thread::panicking())
-                .is_ok();
+            let Some(deleter) = self.deleter.take() else {
+                return;
+            };
 
-            if task_alive {
-                let lock = self
-                    .task_finished
-                    .0
-                    .lock()
-                    .expect("ResourceGuard lock poisoned");
-                let _lock = self
-                    .task_finished
-                    .1
-                    .wait_while(lock, |deleted| !*deleted)
-                    .expect("ResourceGuard lock poisoned");
+            if !std::thread::panicking() || self.delete_on_fail {
+                let _ = std::thread::spawn(move || {
+                    tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("failed to create tokio runtime")
+                        .block_on(deleter);
+                })
+                .join();
             }
         }
     }
@@ -533,9 +560,37 @@ mod utils {
         pub name: String,
         pub namespace: String,
         pub target: String,
-        _pod: ResourceGuard,
-        _service: ResourceGuard,
-        _namespace: Option<ResourceGuard>,
+        pod_guard: ResourceGuard,
+        service_guard: ResourceGuard,
+        namespace_guard: Option<ResourceGuard>,
+    }
+
+    impl Drop for KubeService {
+        fn drop(&mut self) {
+            let deleters = [
+                self.pod_guard.take_deleter(),
+                self.service_guard.take_deleter(),
+                self.namespace_guard
+                    .as_mut()
+                    .and_then(ResourceGuard::take_deleter),
+            ]
+            .into_iter()
+            .filter_map(std::convert::identity)
+            .collect::<Vec<_>>();
+
+            if deleters.is_empty() {
+                return;
+            }
+
+            let _ = std::thread::spawn(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("failed to create tokio runtime")
+                    .block_on(futures::future::join_all(deleters));
+            })
+            .join();
+        }
     }
 
     /// Create a new [`KubeService`] and related Kubernetes resources. The resources will be deleted
@@ -553,10 +608,9 @@ mod utils {
         #[future] kube_client: Client,
     ) -> KubeService {
         let delete_after_fail = std::env::var_os(PRESERVE_FAILED_ENV_NAME).is_none();
-
         println!(
-            "{:?} creating service {service_name:?} in namespace {namespace:?}",
-            Utc::now()
+            "{} creating service {service_name:?} in namespace {namespace:?}",
+            format_time()
         );
 
         let kube_client = kube_client.await;
@@ -726,9 +780,9 @@ mod utils {
             name,
             namespace: namespace.to_string(),
             target: format!("pod/{target}/container/{CONTAINER_NAME}"),
-            _pod: pod_guard,
-            _service: service_guard,
-            _namespace: namespace_guard,
+            pod_guard,
+            service_guard,
+            namespace_guard,
         }
     }
 
@@ -977,5 +1031,13 @@ mod utils {
             headers.clone(),
         )
         .await;
+    }
+
+    #[fixture]
+    #[once]
+    pub fn config_dir() -> PathBuf {
+        let mut config_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        config_path.push("configs");
+        config_path
     }
 }

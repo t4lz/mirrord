@@ -11,7 +11,7 @@ use hyper::Response;
 use iptables::IPTables;
 use mirrord_protocol::{
     tcp::{NewTcpConnection, TcpClose},
-    RemoteError::BadHttpFilterRegex,
+    RemoteError::{BadHttpFilterExRegex, BadHttpFilterRegex},
     ResponseError::PortAlreadyStolen,
 };
 use streammap_ext::StreamMap;
@@ -29,7 +29,7 @@ use crate::{
     error::Result,
     steal::{
         connection::StealSubscription::{HttpFiltered, Unfiltered},
-        http::HttpFilterManager,
+        http::{HttpFilter, HttpFilterManager},
     },
     util::IndexAllocator,
     AgentError::{AgentInvariantViolated, HttpRequestReceiverClosed},
@@ -441,7 +441,7 @@ impl TcpConnectionStealer {
                             Err(PortAlreadyStolen(port))
                         }
                         Some(HttpFiltered(manager)) => {
-                            manager.add_client(client_id, regex);
+                            manager.add_client(client_id, HttpFilter::new_header_filter(regex));
                             Ok(port)
                         }
                         None => {
@@ -449,7 +449,7 @@ impl TcpConnectionStealer {
 
                             let manager = HttpFiltered(HttpFilterManager::new(
                                 client_id,
-                                regex,
+                                HttpFilter::new_header_filter(regex),
                                 self.http_request_sender.clone(),
                             ));
 
@@ -460,6 +460,31 @@ impl TcpConnectionStealer {
                     Err(fail) => Err(From::from(BadHttpFilterRegex(filter, fail.to_string()))),
                 }
             }
+            StealType::FilteredHttpEx(port, filter) => match HttpFilter::try_from(&filter) {
+                Err(fail) => Err(From::from(BadHttpFilterExRegex(filter, fail.to_string()))),
+                Ok(filter) => match self.port_subscriptions.get_mut(&port) {
+                    Some(Unfiltered(earlier_client)) => {
+                        error!("Can't steal port {port:?} as it is already being stolen with no filters by client {earlier_client:?}.");
+                        Err(PortAlreadyStolen(port))
+                    }
+                    Some(HttpFiltered(manager)) => {
+                        manager.add_client(client_id, filter);
+                        Ok(port)
+                    }
+                    None => {
+                        first_subscriber = true;
+
+                        let manager = HttpFiltered(HttpFilterManager::new(
+                            client_id,
+                            filter,
+                            self.http_request_sender.clone(),
+                        ));
+
+                        self.port_subscriptions.insert(port, manager);
+                        Ok(port)
+                    }
+                },
+            },
         };
 
         if first_subscriber && let Ok(port) = steal_port {
@@ -494,6 +519,9 @@ impl TcpConnectionStealer {
         };
         if port_unsubscribed {
             // No remaining subscribers on this port.
+
+            // If there are ongoing connections, this will interrupt them. This is a known issue
+            // https://github.com/metalbear-co/mirrord/issues/1575
             self.iptables()?
                 .remove_redirect(port, self.stealer.local_addr()?.port())
                 .await?;
