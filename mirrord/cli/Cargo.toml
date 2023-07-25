@@ -25,6 +25,8 @@ mirrord-protocol = { path = "../protocol" }
 mirrord-console = { path = "../console" }
 mirrord-analytics = { path = "../analytics" }
 
+tracing-appender = "0.2.2"
+
 actix-codec.workspace = true
 clap.workspace = true
 tracing.workspace = true

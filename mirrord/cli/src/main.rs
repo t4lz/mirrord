@@ -33,6 +33,7 @@ use semver::Version;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tracing::{error, info, warn};
+use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{fmt, prelude::*, registry, EnvFilter};
 use which::which;
 
@@ -367,6 +368,7 @@ async fn register_to_waitlist(email: EmailAddress) -> Result<()> {
 }
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+static mut TRACING_GUARD: Option<WorkerGuard> = None;
 
 #[tokio::main]
 async fn main() -> miette::Result<()> {
@@ -379,6 +381,16 @@ async fn main() -> miette::Result<()> {
             .with(fmt::layer().with_writer(std::io::stderr))
             .with(EnvFilter::from_default_env())
             .init();
+    } else if let Commands::InternalProxy(_) = &cli.commands {
+        let file_appender = tracing_appender::rolling::never(
+            "/Users/tal/Documents/projects/mirrord/",
+            "internal_proxy.log",
+        );
+        let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+        unsafe {
+            let _ = TRACING_GUARD.insert(_guard);
+        }
+        tracing_subscriber::fmt().with_writer(non_blocking).init();
     }
 
     static MAIN_PROGRESS_TASK: LazyLock<TaskProgress> =

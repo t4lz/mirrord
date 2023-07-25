@@ -64,12 +64,12 @@ async fn connection_task(
                 match layer_message {
                     Some(Ok(layer_message)) => {
                         if let Err(err) = agent_sender.send(layer_message).await {
-                            trace!("Error sending layer message to agent: {err:#?}");
+                            error!("Error sending layer message to agent: {err:#?}");
                             break;
                         }
                     },
                     Some(Err(ref error)) if error.kind() == ErrorKind::ConnectionReset => {
-                        trace!("layer connection reset");
+                        error!("layer connection reset");
                         break;
                     },
                     Some(Err(fail)) => {
