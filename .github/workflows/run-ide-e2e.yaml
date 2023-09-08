@@ -43,7 +43,8 @@ jobs:
           name: mirrord-artifacts
       - run: |
           ls -l "${GITHUB_WORKSPACE}"
-          echo "${GITHUB_WORKSPACE}" >> "$GITHUB_PATH"          
+          chmod u+x "${GITHUB_WORKSPACE}"/mirrord
+          echo "${GITHUB_WORKSPACE}" >> "$GITHUB_PATH"
       - run: |
           echo $PATH
           mirrord -V
