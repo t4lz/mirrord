@@ -73,10 +73,6 @@ jobs:
           components: rustfmt, clippy
           target: aarch64-apple-darwin
           toolchain: nightly-2023-09-07
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v2
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: |
           cd mirrord/layer/tests/apps/outgoing
           cargo build
