@@ -62,8 +62,6 @@ jobs:
 
   macos_tests:
     runs-on: macos-13
-    env:
-      MIRRORD_TEST_USE_EXISTING_LIB: ../../target/x86_64-apple-darwin/debug/libmirrord_layer.dylib
     steps:
       - uses: actions/checkout@v3 # Checkout the mirrord repo.
       # the setup rust toolchain action ignores the input if file exists.. so remove it
