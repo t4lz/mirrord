@@ -58,7 +58,7 @@ jobs:
       - run: |
           cd mirrord/layer/tests/apps/outgoing
           cargo build
-      - run: cargo test --target x86_64-unknown-linux-gnu -p mirrord-layer --test outgoing outgoing_tcp::with_config_2
+      - run: for i in {1..42}; do cargo test --target x86_64-unknown-linux-gnu -p mirrord-layer --test outgoing outgoing_tcp::with_config_2; done
 
   macos_tests:
     runs-on: macos-13
@@ -78,4 +78,4 @@ jobs:
           cargo build
       - run: cargo build --target=x86_64-apple-darwin -p mirrord-layer # Build layer lib. The tests load it into the apps.
       - name: mirrord layer tests
-        run: cargo test --target=x86_64-apple-darwin -p mirrord-layer --test outgoing outgoing_tcp::with_config_2
+        run: for i in {1..42}; do cargo test --target=x86_64-apple-darwin -p mirrord-layer --test outgoing outgoing_tcp::with_config_2; done
