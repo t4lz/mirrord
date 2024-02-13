@@ -546,12 +546,15 @@ mod steal {
         #[values(Application::PythonFastApiHTTP, Application::NodeHTTP)] application: Application,
         #[values("THIS IS NOT HTTP!\n", "short.\n")] tcp_data: &str,
     ) {
+        println!("starting test");
         let service = tcp_echo_service.await;
         let kube_client = kube_client.await;
         let (host, port) = get_service_host_and_port(kube_client.clone(), &service).await;
+        println!("got service");
 
         let flags = vec!["--steal"];
 
+        println!("running mirrord");
         let mut mirrorded_process = application
             .run(
                 &service.target,
@@ -560,7 +563,9 @@ mod steal {
                 Some(vec![("MIRRORD_HTTP_HEADER_FILTER", "x-filter: yes")]),
             )
             .await;
+        println!("started mirrord");
 
+        println!("waiting for subscription log");
         mirrorded_process
             .wait_for_line(Duration::from_secs(40), "daemon subscribed")
             .await;
