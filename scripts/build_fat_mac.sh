@@ -7,6 +7,7 @@
 set -e
 cargo build -p mirrord-layer --target=x86_64-apple-darwin
 cargo build -p mirrord-layer --target=aarch64-apple-darwin
+clang -arch arm64e -dynamiclib -o shim.dylib shim.c
 #cp target/aarch64-apple-darwin/debug/libmirrord_layer.dylib target/aarch64-apple-darwin/debug/libmirrord_layer_arm64e.dylib
 #printf '\x02' | dd of=target/aarch64-apple-darwin/debug/libmirrord_layer_arm64e.dylib bs=1 seek=8 count=1 conv=notrunc
 #codesign -f -s - target/aarch64-apple-darwin/debug/libmirrord_layer_arm64e.dylib
