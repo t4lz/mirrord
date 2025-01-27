@@ -185,6 +185,10 @@ impl LayerSetup {
     pub fn env_backup(&self) -> &Vec<(String, String)> {
         &self.env_backup
     }
+
+    pub fn ipv6_enabled(&self) -> bool {
+        self.config.feature.network.ipv6
+    }
 }
 
 /// HTTP filter used by the layer with the `steal` feature.

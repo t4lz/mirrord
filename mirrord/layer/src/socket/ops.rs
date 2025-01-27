@@ -627,7 +627,10 @@ pub(super) fn connect(
                 .family()
                 .map(|family| family as i32)
                 .unwrap_or(-1);
-            if domain != libc::AF_INET && domain != libc::AF_UNIX {
+            if !(domain == libc::AF_INET
+                || (domain == libc::AF_INET6 && crate::setup().ipv6_enabled())
+                || domain == libc::AF_UNIX)
+            {
                 return Detour::Bypass(Bypass::Domain(domain));
             }
             // I really hate it, but nix seems to really make this API bad :()
