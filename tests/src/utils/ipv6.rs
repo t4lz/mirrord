@@ -64,6 +64,7 @@ pub async fn send_request_with_method(
 
     println!("Request: {:?}", req);
 
+    request_sender.ready().await.unwrap();
     let res = request_sender.send_request(req).await.unwrap();
     println!("Response: {:?}", res);
     assert_eq!(res.status(), hyper::StatusCode::OK);

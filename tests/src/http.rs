@@ -139,12 +139,11 @@ mod http_tests {
         let api = Api::<Pod>::namespaced(kube_client.clone(), &service.namespace);
         portforward_http_requests(&api, service, false).await;
 
-        process.wait_for_line(Duration::from_secs(10), "GET").await;
-        process.wait_for_line(Duration::from_secs(10), "POST").await;
-        process.wait_for_line(Duration::from_secs(10), "PUT").await;
-        process
-            .wait_for_line(Duration::from_secs(10), "DELETE")
-            .await;
+        // Verify the local app running with mirrord gets the incoming requests.
+        for method in ["GET", "POST", "PUT", "DELETE"] {
+            process.wait_for_line(Duration::from_secs(10), method).await;
+        }
+
         tokio::time::timeout(Duration::from_secs(40), process.wait())
             .await
             .unwrap();
