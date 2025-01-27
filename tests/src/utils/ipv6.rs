@@ -54,6 +54,7 @@ pub async fn ipv6_service(
 pub async fn send_request_with_method(
     method: &str,
     request_sender: &mut SendRequest<Empty<hyper::body::Bytes>>,
+    steal: bool,
 ) {
     let req = Request::builder()
         .method(method)
@@ -68,7 +69,18 @@ pub async fn send_request_with_method(
     assert_eq!(res.status(), hyper::StatusCode::OK);
     let bytes = res.collect().await.unwrap().to_bytes();
     let response_string = String::from_utf8(bytes.to_vec()).unwrap();
-    assert_eq!(response_string, method);
+    if steal {
+        // When stealing, we will get a response from the local app, which only returns the method
+        // name as a response.
+        assert_eq!(response_string, method);
+    } else {
+        // When mirroring, we will get a response from the remote app, which returns this longer
+        // response.
+        assert_eq!(
+            format!("OK - {}: Request completed\n", method),
+            response_string
+        );
+    }
 }
 
 /// Create a portforward to the pod of the test service, and send HTTP requests over it.
@@ -79,7 +91,7 @@ pub async fn send_request_with_method(
 /// - If a request cannot be sent.
 /// - If a response's code is not OK
 /// - If a response's body is not the method's name.
-pub async fn portforward_http_requests(api: &Api<Pod>, service: KubeService) {
+pub async fn portforward_http_requests(api: &Api<Pod>, service: KubeService, steal: bool) {
     let mut portforwarder = api
         .portforward(&service.pod_name, &[80])
         .await
@@ -95,6 +107,6 @@ pub async fn portforward_http_requests(api: &Api<Pod>, service: KubeService) {
         }
     });
     for method in ["GET", "POST", "PUT", "DELETE"] {
-        send_request_with_method(method, &mut request_sender).await;
+        send_request_with_method(method, &mut request_sender, steal).await;
     }
 }

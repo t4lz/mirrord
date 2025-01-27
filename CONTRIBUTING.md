@@ -145,6 +145,8 @@ Feel free to add instructions on how to make that "manual" step unnecessary.
 IPv6 tests (they currently don't run in the CI):
 - steal_http_ipv6_traffic
 - connect_to_kubernetes_api_service_over_ipv6
+- outgoing_traffic_single_request_ipv6_enabled
+- mirror_ipv6_http_traffic
 
 
 ### Cleanup

@@ -99,7 +99,7 @@ mod steal_tests {
             .await;
 
         let api = Api::<Pod>::namespaced(kube_client.clone(), &service.namespace);
-        portforward_http_requests(&api, service).await;
+        portforward_http_requests(&api, service, true).await;
 
         tokio::time::timeout(Duration::from_secs(40), process.wait())
             .await
