@@ -13,7 +13,7 @@ mod file_ops_tests {
         go_statfs_service, kube_client, run_exec_with_target, service, FileOps, KubeService,
     };
 
-    #[cfg_attr(not(any(feature = "ephemeral", feature = "job")), ignore)]
+    #[cfg(any(feature = "ephemeral", feature = "job"))]
     #[cfg(target_os = "linux")]
     #[rstest]
     #[trace]
@@ -49,7 +49,7 @@ mod file_ops_tests {
         ops.assert(process).await;
     }
 
-    #[cfg_attr(not(feature = "job"), ignore)]
+    #[cfg(feature = "job")]
     #[cfg(target_os = "macos")]
     #[rstest]
     #[trace]
@@ -79,7 +79,7 @@ mod file_ops_tests {
         process.assert_python_fileops_stderr().await;
     }
 
-    #[cfg_attr(not(feature = "job"), ignore)]
+    #[cfg(feature = "job")]
     #[rstest]
     #[trace]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -184,7 +184,7 @@ mod file_ops_tests {
     /// On Linux: Test our getdents64 Go syscall hook, for `os.ReadDir` on go.
     /// This is an E2E test and not an integration test in order to test the agent side of the
     /// detour.
-    #[cfg_attr(not(any(feature = "ephemeral", feature = "job")), ignore)]
+    #[cfg(any(feature = "ephemeral", feature = "job"))]
     #[rstest]
     #[trace]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

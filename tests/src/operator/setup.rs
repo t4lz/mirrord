@@ -77,7 +77,7 @@ async fn check_install_file_result(file_path: String, temp_dir: TempDir) {
     assert!(!stdout.is_empty());
 }
 
-#[cfg_attr(not(feature = "cli"), ignore)]
+#[cfg(feature = "cli")]
 #[rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[timeout(Duration::from_secs(240))]
@@ -95,7 +95,7 @@ pub async fn operator_setup(
     check_install_result(stdout).await;
 }
 
-#[cfg_attr(not(feature = "cli"), ignore)]
+#[cfg(feature = "cli")]
 #[rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[timeout(Duration::from_secs(240))]
