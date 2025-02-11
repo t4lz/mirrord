@@ -1,5 +1,6 @@
 /// Tests for mirroring existing connections.
 #[cfg(test)]
+#[cfg(feature = "job")]
 mod issue1317_tests {
     use std::{path::PathBuf, time::Duration};
 
@@ -26,7 +27,6 @@ mod issue1317_tests {
     #[trace]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[timeout(Duration::from_secs(240))]
-    #[cfg(feature = "job")]
     async fn issue1317(
         #[future]
         #[notrace]

@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[cfg(feature = "targetless")]
 /// Test the targetless execution mode, where an independent agent is spawned - not targeting any
 /// existing pod/container/deployment.
 mod targetless_tests {
@@ -16,7 +17,6 @@ mod targetless_tests {
     ///
     /// Running this test on a cluster that does not have any pods, also proves that we don't use
     /// any existing pod and the agent pod is completely independent.    
-    #[cfg(feature = "targetless")]
     #[rstest]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[timeout(Duration::from_secs(30))]

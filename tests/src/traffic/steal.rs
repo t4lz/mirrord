@@ -1,27 +1,36 @@
 #[cfg(test)]
 mod steal_tests {
-    use std::{net::SocketAddr, path::Path, time::Duration};
+    use std::time::Duration;
+    #[cfg(feature = "job")]
+    use std::{net::SocketAddr, path::Path};
 
     use futures_util::{SinkExt, StreamExt};
     use k8s_openapi::api::core::v1::Pod;
     use kube::{Api, Client};
+    #[cfg(feature = "job")]
     use reqwest::{header::HeaderMap, Url};
     use rstest::*;
+    #[cfg(feature = "job")]
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    #[cfg(any(feature = "ephemeral", feature = "job"))]
+    use tokio::time::sleep;
     use tokio::{
-        io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+        io::{AsyncReadExt, AsyncWriteExt},
         net::TcpStream,
-        time::sleep,
     };
     use tokio_tungstenite::{
         connect_async,
         tungstenite::{client::IntoClientRequest, Message},
     };
 
+    #[cfg(any(feature = "ephemeral", feature = "job"))]
+    use crate::utils::send_requests;
+    #[cfg(feature = "job")]
+    use crate::utils::{config_dir, http2_service, tcp_echo_service};
     use crate::utils::{
-        config_dir, get_service_host_and_port, get_service_url, http2_service,
+        get_service_host_and_port, get_service_url,
         ipv6::{ipv6_service, portforward_http_requests},
-        kube_client, send_request, send_requests, service, tcp_echo_service, websocket_service,
-        Application, KubeService,
+        kube_client, send_request, service, websocket_service, Application, KubeService,
     };
 
     #[cfg(any(feature = "ephemeral", feature = "job"))]

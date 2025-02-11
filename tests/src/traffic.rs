@@ -1,23 +1,33 @@
 mod steal;
 
 #[cfg(test)]
+#[cfg(any(feature = "ephemeral", feature = "job"))]
 mod traffic_tests {
+    use std::time::Duration;
+    #[cfg(feature = "job")]
     use std::{
         net::UdpSocket,
         path::{Path, PathBuf},
-        time::Duration,
     };
 
+    #[cfg(feature = "job")]
     use futures::Future;
+    #[cfg(feature = "job")]
     use futures_util::{stream::TryStreamExt, AsyncBufReadExt};
+    #[cfg(feature = "job")]
     use k8s_openapi::api::core::v1::Pod;
+    #[cfg(feature = "job")]
     use kube::{api::LogParams, Api, Client};
     use rstest::*;
+    #[cfg(feature = "job")]
     use tokio::{fs::File, io::AsyncWriteExt};
 
+    #[cfg(feature = "job")]
     use crate::utils::{
-        config_dir, hostname_service, ipv6::ipv6_service, kube_client, run_exec_with_target,
-        service, udp_logger_service, Application, KubeService, CONTAINER_NAME,
+        config_dir, hostname_service, kube_client, udp_logger_service, CONTAINER_NAME,
+    };
+    use crate::utils::{
+        ipv6::ipv6_service, run_exec_with_target, service, Application, KubeService,
     };
 
     #[cfg(feature = "job")]
@@ -456,6 +466,7 @@ mod traffic_tests {
         assert!(res.success());
     }
 
+    #[cfg(feature = "job")]
     pub async fn test_go(service: impl Future<Output = KubeService>, command: Vec<&str>) {
         let service = service.await;
         let mut process =
