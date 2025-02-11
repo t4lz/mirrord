@@ -1,4 +1,5 @@
 #![cfg(test)]
+#![cfg(feature = "cli")]
 //! Test the operator setup code in mirrord. Does not actually install an operator, just generates
 //! the yaml files and verifies they're valid.
 use std::{process::Stdio, time::Duration};
