@@ -107,9 +107,9 @@ And then in order to use that binary in the tests, run the tests like this:
 MIRRORD_TESTS_USE_BINARY=../target/universal-apple-darwin/debug/mirrord cargo test -p tests
 ```
 
-If new tests are added, decorate them with `cfg_attr` attribute macro to define what the tests target.
-For example, a test which only tests sanity of the ephemeral container feature should be decorated with
-`#[cfg_attr(not(feature = "ephemeral"), ignore)]`
+If new tests are added, decorate them with `cfg` attribute macro to define what the tests target.
+For example, a test which only tests the ephemeral container feature should be decorated with
+`#[cfg(feature = "ephemeral")]`
 
 On Linux, running tests may exhaust a large amount of RAM and crash the machine. To prevent this, limit the number of concurrent jobs by running the command with e.g. `-j 4`
 
