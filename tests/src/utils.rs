@@ -588,10 +588,14 @@ pub async fn run_exec_with_target(
 }
 
 pub async fn run_mirrord(args: Vec<&str>, env: HashMap<&str, &str>) -> TestProcess {
-    let path = match option_env!("MIRRORD_TESTS_USE_BINARY") {
-        None => env!("CARGO_BIN_FILE_MIRRORD"),
-        Some(binary_path) => binary_path,
-    };
+    let path = option_env!("MIRRORD_TESTS_USE_BINARY");
+
+    #[cfg(feature = "mirrord-bin")]
+    let path = path.unwrap_or_else(|| env!("CARGO_BIN_FILE_MIRRORD"));
+    #[cfg(not(feature = "mirrord-bin"))]
+    let path =
+        path.expect("Please set MIRRORD_TESTS_USE_BINARY or turn on the \"mirrord-bin\" feautre.");
+
     let temp_dir = tempdir().unwrap();
 
     let server = Command::new(path)

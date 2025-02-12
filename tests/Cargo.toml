@@ -22,7 +22,6 @@ reqwest.workspace = true
 regex.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "net", "macros", "process"] }
 serde_json.workspace = true
-mirrord = { artifact = "bin", path = "../mirrord/cli" }
 mirrord-operator = { path = "../mirrord/operator", features = ["setup", "crd"] }
 serde.workspace = true
 futures.workspace = true
@@ -41,10 +40,17 @@ chrono.workspace = true
 tempfile.workspace = true
 tokio-tungstenite.workspace = true
 
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+# For macos we ususally need the universal build, so no reason to build the CLI as part of running the tests.
+mirrord = { artifact = "bin", path = "../mirrord/cli", optional = true }
+
+
 [features]
-default = ["ephemeral", "job", "cli", "targetless"]
+default = ["ephemeral", "job", "cli", "targetless", "mirrord-bin"]
 ephemeral = []
 job = []
 operator = ["dep:aws-config", "dep:aws-sdk-sqs"]
 cli = []
 targetless = []
+# Build the mirrord binary when building the tests.
+mirrord-bin = ["dep:mirrord"]

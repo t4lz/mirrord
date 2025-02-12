@@ -1,6 +1,7 @@
 #![feature(stmt_expr_attributes)]
 #![feature(ip)]
 #![warn(clippy::indexing_slicing)]
+#![deny(unused_crate_dependencies)]
 
 #[cfg(feature = "cli")]
 mod cli;
