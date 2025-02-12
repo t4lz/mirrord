@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[cfg(any(feature = "ephemeral", feature = "job"))]
 mod steal_tests {
     use std::time::Duration;
     #[cfg(feature = "job")]

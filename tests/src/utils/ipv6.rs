@@ -1,4 +1,5 @@
 #![cfg(test)]
+#![cfg(any(feature = "ephemeral", feature = "job"))]
 
 use http_body_util::{BodyExt, Empty};
 use hyper::{
