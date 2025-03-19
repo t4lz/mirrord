@@ -28,42 +28,15 @@ pub(crate) mod prerouting;
 pub(crate) mod redirect;
 pub(crate) mod standard;
 
-pub static IPTABLE_PREROUTING_ENV: &str = "MIRRORD_IPTABLE_PREROUTING_NAME";
-pub static IPTABLE_PREROUTING: LazyLock<String> = LazyLock::new(|| {
-    std::env::var(IPTABLE_PREROUTING_ENV).unwrap_or_else(|_| {
-        format!(
-            "MIRRORD_INPUT_{}",
-            Alphanumeric.sample_string(&mut rand::rng(), 5)
-        )
-    })
-});
+pub const IPTABLE_PREROUTING: &str = "MIRRORD_INPUT";
 
-pub(crate) static IPTABLE_MESH_ENV: &str = "MIRRORD_IPTABLE_MESH_NAME";
-pub(crate) static IPTABLE_MESH: LazyLock<String> = LazyLock::new(|| {
-    std::env::var(IPTABLE_MESH_ENV).unwrap_or_else(|_| {
-        format!(
-            "MIRRORD_OUTPUT_{}",
-            Alphanumeric.sample_string(&mut rand::rng(), 5)
-        )
-    })
-});
+pub(crate) const IPTABLE_MESH: &str = "MIRRORD_OUTPUT";
 
-pub(crate) static IPTABLE_STANDARD_ENV: &str = "MIRRORD_IPTABLE_STANDARD_NAME";
-pub(crate) static IPTABLE_STANDARD: LazyLock<String> = LazyLock::new(|| {
-    std::env::var(IPTABLE_STANDARD_ENV).unwrap_or_else(|_| {
-        format!(
-            "MIRRORD_STANDARD_{}",
-            Alphanumeric.sample_string(&mut rand::rng(), 5)
-        )
-    })
-});
+pub(crate) const IPTABLE_STANDARD: &str = "MIRRORD_STANDARD";
 
-pub static IPTABLE_IPV4_ROUTE_LOCALNET_ORIGINAL_ENV: &str = "IPTABLE_IPV4_ROUTE_LOCALNET_ORIGINAL";
 pub static IPTABLE_IPV4_ROUTE_LOCALNET_ORIGINAL: LazyLock<String> = LazyLock::new(|| {
-    std::env::var(IPTABLE_IPV4_ROUTE_LOCALNET_ORIGINAL_ENV).unwrap_or_else(|_| {
-        std::fs::read_to_string("/proc/sys/net/ipv4/conf/all/route_localnet")
-            .unwrap_or_else(|_| "0".to_string())
-    })
+    std::fs::read_to_string("/proc/sys/net/ipv4/conf/all/route_localnet")
+        .unwrap_or_else(|_| "0".to_string())
 });
 
 const IPTABLES_TABLE_NAME: &str = "nat";
@@ -331,13 +304,13 @@ mod tests {
             .returning(|_| Ok(vec![]));
 
         mock.expect_create_chain()
-            .with(str::starts_with("MIRRORD_INPUT_"))
+            .with(eq(IPTABLE_PREROUTING))
             .times(1)
             .returning(|_| Ok(()));
 
         mock.expect_insert_rule()
             .with(
-                str::starts_with("MIRRORD_INPUT_"),
+                eq(IPTABLE_PREROUTING),
                 eq("-m tcp -p tcp --dport 69 -j REDIRECT --to-ports 420"),
                 eq(1),
             )
@@ -345,13 +318,13 @@ mod tests {
             .returning(|_, _, _| Ok(()));
 
         mock.expect_create_chain()
-            .with(str::starts_with("MIRRORD_STANDARD_"))
+            .with(eq(IPTABLE_STANDARD))
             .times(1)
             .returning(|_| Ok(()));
 
         mock.expect_insert_rule()
             .with(
-                str::starts_with("MIRRORD_STANDARD_"),
+                eq(IPTABLE_STANDARD),
                 str::starts_with("-m owner --gid-owner"),
                 eq(1),
             )
@@ -360,7 +333,7 @@ mod tests {
 
         mock.expect_insert_rule()
             .with(
-                str::starts_with("MIRRORD_STANDARD_"),
+                eq(IPTABLE_STANDARD),
                 eq("-o lo -m tcp -p tcp --dport 69 -j REDIRECT --to-ports 420"),
                 eq(2),
             )
@@ -368,18 +341,18 @@ mod tests {
             .returning(|_, _, _| Ok(()));
 
         mock.expect_add_rule()
-            .with(eq("PREROUTING"), str::starts_with("-j MIRRORD_INPUT_"))
+            .with(eq("PREROUTING"), eq(format!("-j {}", IPTABLE_PREROUTING)))
             .times(1)
             .returning(|_, _| Ok(()));
 
         mock.expect_add_rule()
-            .with(eq("OUTPUT"), str::starts_with("-j MIRRORD_STANDARD_"))
+            .with(eq("OUTPUT"), eq(format!("-j {}", IPTABLE_STANDARD)))
             .times(1)
             .returning(|_, _| Ok(()));
 
         mock.expect_remove_rule()
             .with(
-                str::starts_with("MIRRORD_INPUT_"),
+                eq(IPTABLE_PREROUTING),
                 eq("-m tcp -p tcp --dport 69 -j REDIRECT --to-ports 420"),
             )
             .times(1)
@@ -387,29 +360,29 @@ mod tests {
 
         mock.expect_remove_rule()
             .with(
-                str::starts_with("MIRRORD_STANDARD_"),
+                eq(IPTABLE_STANDARD),
                 eq("-o lo -m tcp -p tcp --dport 69 -j REDIRECT --to-ports 420"),
             )
             .times(1)
             .returning(|_, _| Ok(()));
 
         mock.expect_remove_rule()
-            .with(eq("PREROUTING"), str::starts_with("-j MIRRORD_INPUT_"))
+            .with(eq("PREROUTING"), eq(format!("-j {}", IPTABLE_PREROUTING)))
             .times(1)
             .returning(|_, _| Ok(()));
 
         mock.expect_remove_rule()
-            .with(eq("OUTPUT"), str::starts_with("-j MIRRORD_STANDARD_"))
+            .with(eq("OUTPUT"), eq(format!("-j {}", IPTABLE_STANDARD)))
             .times(1)
             .returning(|_, _| Ok(()));
 
         mock.expect_remove_chain()
-            .with(str::starts_with("MIRRORD_INPUT_"))
+            .with(eq(IPTABLE_PREROUTING))
             .times(1)
             .returning(|_| Ok(()));
 
         mock.expect_remove_chain()
-            .with(str::starts_with("MIRRORD_STANDARD_"))
+            .with(eq(IPTABLE_STANDARD))
             .times(1)
             .returning(|_| Ok(()));
 
@@ -455,13 +428,13 @@ mod tests {
             });
 
         mock.expect_create_chain()
-            .with(str::starts_with("MIRRORD_INPUT_"))
+            .with(eq(IPTABLE_PREROUTING))
             .times(1)
             .returning(|_| Ok(()));
 
         mock.expect_insert_rule()
             .with(
-                str::starts_with("MIRRORD_INPUT_"),
+                eq(IPTABLE_PREROUTING),
                 eq("-m multiport -p tcp ! --dports 22 -j RETURN"),
                 eq(1),
             )
@@ -469,18 +442,18 @@ mod tests {
             .returning(|_, _, _| Ok(()));
 
         mock.expect_add_rule()
-            .with(eq("PREROUTING"), str::starts_with("-j MIRRORD_INPUT_"))
+            .with(eq("PREROUTING"), eq(format!("-j {}", IPTABLE_PREROUTING)))
             .times(1)
             .returning(|_, _| Ok(()));
 
         mock.expect_create_chain()
-            .with(str::starts_with("MIRRORD_OUTPUT_"))
+            .with(eq(IPTABLE_MESH))
             .times(1)
             .returning(|_| Ok(()));
 
         mock.expect_insert_rule()
             .with(
-                str::starts_with("MIRRORD_OUTPUT_"),
+                eq(IPTABLE_MESH),
                 str::starts_with("-m owner --gid-owner"),
                 eq(1),
             )
@@ -488,13 +461,13 @@ mod tests {
             .returning(|_, _, _| Ok(()));
 
         mock.expect_add_rule()
-            .with(eq("OUTPUT"), str::starts_with("-j MIRRORD_OUTPUT_"))
+            .with(eq("OUTPUT"), eq(format!("-j {}", IPTABLE_MESH)))
             .times(1)
             .returning(|_, _| Ok(()));
 
         mock.expect_insert_rule()
             .with(
-                str::starts_with("MIRRORD_INPUT_"),
+                eq(IPTABLE_PREROUTING),
                 eq("-m tcp -p tcp --dport 69 -j REDIRECT --to-ports 420"),
                 eq(2),
             )
@@ -503,7 +476,7 @@ mod tests {
 
         mock.expect_insert_rule()
             .with(
-                str::starts_with("MIRRORD_OUTPUT_"),
+                eq(IPTABLE_MESH),
                 eq("-o lo -m tcp -p tcp --dport 69 -j REDIRECT --to-ports 420"),
                 eq(2),
             )
@@ -512,7 +485,7 @@ mod tests {
 
         mock.expect_remove_rule()
             .with(
-                str::starts_with("MIRRORD_INPUT_"),
+                eq(IPTABLE_PREROUTING),
                 eq("-m tcp -p tcp --dport 69 -j REDIRECT --to-ports 420"),
             )
             .times(1)
@@ -520,29 +493,29 @@ mod tests {
 
         mock.expect_remove_rule()
             .with(
-                str::starts_with("MIRRORD_OUTPUT_"),
+                eq(IPTABLE_MESH),
                 eq("-o lo -m tcp -p tcp --dport 69 -j REDIRECT --to-ports 420"),
             )
             .times(1)
             .returning(|_, _| Ok(()));
 
         mock.expect_remove_rule()
-            .with(eq("PREROUTING"), str::starts_with("-j MIRRORD_INPUT_"))
+            .with(eq("PREROUTING"), eq(format!("-j {}", IPTABLE_PREROUTING)))
             .times(1)
             .returning(|_, _| Ok(()));
 
         mock.expect_remove_chain()
-            .with(str::starts_with("MIRRORD_INPUT_"))
+            .with(eq(IPTABLE_PREROUTING))
             .times(1)
             .returning(|_| Ok(()));
 
         mock.expect_remove_rule()
-            .with(eq("OUTPUT"), str::starts_with("-j MIRRORD_OUTPUT_"))
+            .with(eq("OUTPUT"), eq(format!("-j {}", IPTABLE_MESH)))
             .times(1)
             .returning(|_, _| Ok(()));
 
         mock.expect_remove_chain()
-            .with(str::starts_with("MIRRORD_OUTPUT_"))
+            .with(eq(IPTABLE_MESH))
             .times(1)
             .returning(|_| Ok(()));
 
