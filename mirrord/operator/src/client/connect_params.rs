@@ -19,8 +19,10 @@ pub struct ConnectParams<'a> {
     /// Selected mirrord profile.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub profile: Option<&'a str>,
-    #[serde(with = "kafka_splits_serde")]
+    #[serde(with = "queue_splits_serde")]
     pub kafka_splits: HashMap<&'a str, &'a BTreeMap<String, String>>,
+    #[serde(with = "queue_splits_serde")]
+    pub sqs_splits: HashMap<&'a str, &'a BTreeMap<String, String>>,
 }
 
 impl<'a> ConnectParams<'a> {
@@ -30,11 +32,12 @@ impl<'a> ConnectParams<'a> {
             on_concurrent_steal: config.feature.network.incoming.on_concurrent_steal.into(),
             profile: config.profile.as_deref(),
             kafka_splits: config.feature.split_queues.kafka().collect(),
+            sqs_splits: config.feature.split_queues.sqs().collect(),
         }
     }
 }
 
-mod kafka_splits_serde {
+mod queue_splits_serde {
     use std::collections::{BTreeMap, HashMap};
 
     use serde::Serializer;
