@@ -519,6 +519,23 @@ impl OperatorApi<PreparedClientCert> {
     /// We allow copied pods to live only for 30 seconds before the internal proxy connects.
     const COPIED_POD_IDLE_TTL: u32 = 30;
 
+    /// Returns whether the user enabled queue splitting but the installed operator only supports
+    /// it with copy-target.
+    fn need_copy_target_for_old_queue_splitting(&self, layer_config: &LayerConfig) -> bool {
+        (layer_config.feature.split_queues.sqs().next().is_some()
+            && self
+                .operator()
+                .spec
+                .require_feature(NewOperatorFeature::SqsQueueSplittingDirect)
+                .is_err())
+            || (layer_config.feature.split_queues.kafka().next().is_some()
+                && self
+                    .operator()
+                    .spec
+                    .require_feature(NewOperatorFeature::KafkaQueueSplittingDirect)
+                    .is_err())
+    }
+
     /// Starts a new operator session and connects to the target.
     /// Returned [`OperatorSessionConnection::session`] can be later used to create another
     /// connection in the same session with [`OperatorApi::connect_in_existing_session`].
@@ -559,13 +576,7 @@ impl OperatorApi<PreparedClientCert> {
         let is_empty_deployment = target.empty_deployment();
         let do_copy_target = layer_config.feature.copy_target.enabled
             || is_empty_deployment
-            || layer_config.feature.split_queues.sqs().next().is_some()
-            || (layer_config.feature.split_queues.kafka().next().is_some()
-                && self
-                    .operator()
-                    .spec
-                    .require_feature(NewOperatorFeature::KafkaQueueSplittingDirect)
-                    .is_err());
+            || self.need_copy_target_for_old_queue_splitting(layer_config);
         let (connect_url, session_id) = if do_copy_target {
             let mut copy_subtask = progress.subtask("copying target");
 
