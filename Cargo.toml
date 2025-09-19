@@ -209,3 +209,12 @@ private_intra_doc_links = "allow"
 strip = "debuginfo"
 # Enabling LTO causes this issue https://github.com/metalbear-co/mirrord/issues/906
 lto = false
+
+# (Panicking across FFI boundries is UB)[https://doc.rust-lang.org/nomicon/unwinding.html],
+# by not unwinding, we prevent a case where we panic by mistake in one of our hooks and
+# that panic crosses the FFI boundry.
+# Also, with `abort` we get a smaller binary.
+panic = 'abort'
+
+[profile.dev]
+panic = 'abort'
