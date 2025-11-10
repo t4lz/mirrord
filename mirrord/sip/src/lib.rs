@@ -690,9 +690,9 @@ mod main {
             .map_err(|error| eprintln!("Failed to unlock SIP logfile: {error}"));
     }
 
-    /// Check if the file that the user wants to execute is a SIP protected binary
+    /// Check if the file that the user wants to execute is a SIP-protected binary
     ///
-    /// (or a script starting with a shebang that leads to a SIP protected binary).
+    /// (or a script starting with a shebang that leads to a SIP-protected binary).
     /// If it is, create a non-protected version of the file and return `Ok(Some(patched_path)`.
     /// If it is not, `Ok(None)`.
     /// Propagate errors.
